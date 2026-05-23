@@ -167,7 +167,7 @@ function parseCatalog(doc) {
       attr: '',
       detailUrl: detailHref,
       // 志愿数据（后续由 fetchVolunteer 填充）
-      volRequired: '', volElective: '', volOptional: '',
+      volRequired: '', volElective: '', volOptional: '', volSports: '',
     });
   });
   return out;
@@ -197,10 +197,30 @@ function parseVolFromHtml(html) {
   return map;
 }
 
+function parseVolSportsFromHtml(html) {
+  // Sports gridData: [code, seq, name, capacity, applied, "体育X,X,X"]
+  const map = {};
+  const regex = /\[\s*"(\d+)"\s*,\s*"([^"]*?)"\s*,\s*"[^"]*?"\s*,\s*"(\d*)"\s*,\s*"(\d*)"\s*,\s*"(.*?)"\s*\]/g;
+  let m;
+  while ((m = regex.exec(html)) !== null) {
+    const code = m[1];
+    const seq = m[2];
+    const key = code + '_' + seq;
+    map[key] = {
+      code,
+      seq,
+      capacity: parseInt(m[3]) || 0,
+      applied: parseInt(m[4]) || 0,
+      volSports: m[5],
+    };
+  }
+  return map;
+}
+
 async function fetchVolunteer() {
   if (!isZhjwxk) return {};
   try {
-    // Volunteer page is paginated (162+ pages, 3000+ records). Crawl all pages.
+    // Regular volunteer: paginated (tbzySearchBR)
     const allMap = {};
     for (let p = -1; p <= 200; p++) {
       const url = p === -1
@@ -213,6 +233,28 @@ async function fetchVolunteer() {
       if (p > 0 && !Object.keys(batch).length) break;
     }
     console.log(TAG, 'volunteer data:', Object.keys(allMap).length, 'courses');
+
+    // Sports volunteer: tbzySearchTy (体育课志愿，独立页面)
+    const sportsMap = {};
+    for (let p = -1; p <= 20; p++) {
+      const url = p === -1
+        ? `${BASE}/xkBks.xkBksZytjb.do?m=tbzySearchTy&p_xnxq=${SEM}`
+        : `${BASE}/xkBks.xkBksZytjb.do?m=tbzySearchTy&p_xnxq=${SEM}&page=${p}`;
+      const html = await fetchPage(url);
+      const batch = parseVolSportsFromHtml(html);
+      if (!Object.keys(batch).length && p >= 0) break;
+      Object.assign(sportsMap, batch);
+      if (p > 0 && !Object.keys(batch).length) break;
+    }
+    // Merge sports data into allMap
+    for (const [key, val] of Object.entries(sportsMap)) {
+      if (allMap[key]) {
+        Object.assign(allMap[key], val);
+      } else {
+        allMap[key] = val;
+      }
+    }
+    console.log(TAG, 'sports volunteer data:', Object.keys(sportsMap).length, 'courses');
     return allMap;
   } catch(e) { console.warn(TAG, 'volunteer fetch:', e); return {}; }
 }
@@ -869,9 +911,14 @@ function renderCourses(list) {
     // Volunteer data + competition indicator
     const vc = volColor(c);
     const volParts = [];
-    if (c.volRequired && c.volRequired !== '0,0,0') { const s = fmtVol(c.volRequired); if (s) volParts.push(`<span>必 ${s}</span>`); }
-    if (c.volElective && c.volElective !== '0,0,0') { const s = fmtVol(c.volElective); if (s) volParts.push(`<span>限 ${s}</span>`); }
-    if (c.volOptional && c.volOptional !== '0,0,0') { const s = fmtVol(c.volOptional); if (s) volParts.push(`<span>任 ${s}</span>`); }
+    const isTy = c.attr === '体育' || c.department?.includes('体育') || c.name?.includes('体育') || c.typeLabel === '体育';
+    if (isTy && c.volSports && c.volSports !== '0,0,0') {
+      const s = fmtVol(c.volSports); if (s) volParts.push(`<span>体 ${s}</span>`);
+    } else {
+      if (c.volRequired && c.volRequired !== '0,0,0') { const s = fmtVol(c.volRequired); if (s) volParts.push(`<span>必 ${s}</span>`); }
+      if (c.volElective && c.volElective !== '0,0,0') { const s = fmtVol(c.volElective); if (s) volParts.push(`<span>限 ${s}</span>`); }
+      if (c.volOptional && c.volOptional !== '0,0,0') { const s = fmtVol(c.volOptional); if (s) volParts.push(`<span>任 ${s}</span>`); }
+    }
     const volHtml = volParts.length ? `<div class="nx-vol">${volParts.join('')}</div>` : '';
     const volApplied = c.volApplied || 0;
     const volCap = c.volCapacity || c.capacity || 0;
@@ -1451,7 +1498,13 @@ function mergeStaticData(catalog, volData, plan) {
       const v = (key && volData[key]) ? volData[key] : Object.values(volData).find(v => v.code === c.code);
       if (v) {
         c.volRequired = v.volRequired; c.volElective = v.volElective; c.volOptional = v.volOptional;
+        c.volSports = v.volSports || '';
         c.volCapacity = v.capacity || c.capacity; c.volApplied = v.applied || 0;
+        // 体育课优先使用体育志愿数据
+        if ((c.attr === '体育' || c.department?.includes('体育') || c.name?.includes('体育')) && v.volSports) {
+          c.volApplied = v.applied || 0;
+          c.volCapacity = v.capacity || c.volCapacity;
+        }
       }
     });
   }
