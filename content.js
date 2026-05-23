@@ -238,11 +238,15 @@ async function fetchVolunteer() {
     // Sports volunteer: tbzySearchTy (体育课志愿，独立页面)
     try {
       const sportsMap = {};
+      const sportsUrl = `${BASE}/xkBks.xkBksZytjb.do?m=tbzySearchTy&p_xnxq=${SEM}`;
+      console.log(TAG, 'fetching sports volunteer from:', sportsUrl);
+      const sportsHtml = await fetchPage(sportsUrl);
+      console.log(TAG, 'sports volunteer page length:', sportsHtml.length, 'has gridData:', sportsHtml.includes('gridData'));
       for (let p = -1; p <= 20; p++) {
         const url = p === -1
-          ? `${BASE}/xkBks.xkBksZytjb.do?m=tbzySearchTy&p_xnxq=${SEM}`
+          ? sportsUrl
           : `${BASE}/xkBks.xkBksZytjb.do?m=tbzySearchTy&p_xnxq=${SEM}&page=${p}`;
-        const html = await fetchPage(url);
+        const html = p === -1 ? sportsHtml : await fetchPage(url);
         const batch = parseVolSportsFromHtml(html);
         if (!Object.keys(batch).length && p >= 0) break;
         Object.assign(sportsMap, batch);
