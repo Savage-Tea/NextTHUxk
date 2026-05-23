@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "NextTHUxk",
+  "short_name": "NextTHUxk",
+  "version": "1.0.0",
+  "description": "下一代选课 - 基于 AI 决策与现代双栏 UI 的选课无感辅助系统。",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": [
+    "https://webvpn.tsinghua.edu.cn/*",
+    "https://zhjw.cic.tsinghua.edu.cn/*",
+    "https://zhjwxk.cic.tsinghua.edu.cn/*",
+    "http://zhjw.cic.tsinghua.edu.cn/*",
+    "http://zhjwxk.cic.tsinghua.edu.cn/*"
+  ],
+  "content_scripts": [{
+    "matches": [
+      "https://webvpn.tsinghua.edu.cn/*",
+      "https://zhjw.cic.tsinghua.edu.cn/*",
+      "https://zhjwxk.cic.tsinghua.edu.cn/*",
+      "http://zhjw.cic.tsinghua.edu.cn/*",
+      "http://zhjwxk.cic.tsinghua.edu.cn/*"
+    ],
+    "js": ["content.js"],
+    "run_at": "document_idle",
+    "all_frames": true
+  }],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "NextTHUxk"
+  }
+}
