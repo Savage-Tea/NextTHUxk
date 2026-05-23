@@ -28,5 +28,8 @@
   "action": {
     "default_popup": "popup.html",
     "default_title": "NextTHUxk"
+  },
+  "background": {
+    "service_worker": "background.js"
   }
 }

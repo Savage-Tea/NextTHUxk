@@ -54,71 +54,35 @@ async function fetchPage(url, opts = {}) {
 }
 
 // ─── §6. Data Layer ───────────────────────────────────────
-async function fetchGradeFromProfile() {
-  // Strategy 1: Get enrollment year from student profile page (所属年级 field)
-  const profileUrls = [
-    `${BASE}/jxmh.do?url=/jxmh.do&m=bks_ShowBksXx`,
-    'https://zhjw.cic.tsinghua.edu.cn/jxmh.do?url=/jxmh.do&m=bks_ShowBksXx',
-  ];
-  for (const url of profileUrls) {
-    try {
-      const html = await fetchPage(url);
-      if (html.includes('所属年级')) {
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const cells = [...doc.querySelectorAll('td')].map(td => td.textContent.trim());
-        for (let i = 0; i < cells.length - 1; i++) {
-          if (/所属年级/.test(cells[i])) {
-            const ym = cells[i + 1].match(/(\d{4})/);
-            if (ym) {
-              const enrollYear = parseInt(ym[1]);
-              if (enrollYear >= 2020 && enrollYear <= 2030 && SEM) {
-                const sm = SEM.match(/(\d{4})-\d+-(\d)/);
-                if (sm) {
-                  const totalSem = (parseInt(sm[1]) - enrollYear) * 2 + parseInt(sm[2]);
-                  const grade = Math.max(1, Math.min(4, Math.ceil(totalSem / 2)));
-                  console.log(TAG, 'grade from profile 所属年级:', enrollYear, '→', grade);
-                  return grade;
-                }
-              }
-            }
-          }
-        }
-      } else {
-        console.log(TAG, 'profile page has no 所属年级, skipping (length:', html.length, ')');
-      }
-    } catch(e) {
-      console.log(TAG, 'profile fetch:', url, e.message);
-    }
-  }
+async function crossFetch(url) {
+  // Route through background service worker to bypass CORS
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'crossFetch', url }, (resp) => {
+      if (resp?.ok) resolve(resp.text);
+      else resolve(null);
+    });
+  });
+}
 
-  // Strategy 2: Get full training plan from zhjw (all semesters, not just current)
+async function fetchGradeFromProfile() {
+  const profileUrl = 'https://zhjw.cic.tsinghua.edu.cn/jxmh.do?url=/jxmh.do&m=bks_ShowBksXx';
   try {
-    const zhjwBase = location.protocol + '//zhjw.cic.tsinghua.edu.cn';
-    const listHtml = await fetchPage(`${zhjwBase}/jhBks.vjhBksPyfakcbBs.do?m=grPyfabks&theRole=bks&theModule=pyfa`);
-    if (!listHtml.includes('accessDenied') && listHtml.length > 500) {
-      const m = /fajhh=(\d+)/.exec(listHtml);
-      if (m) {
-        const fullHtml = await fetchPage(`${zhjwBase}/jhBks.vjhBksPyfakcbBs.do?m=index2&theModule=pyfa&p_fajhh=${m[1]}`);
-        const doc = new DOMParser().parseFromString(fullHtml, 'text/html');
-        const rows = doc.querySelectorAll('#content_1 table tbody tr.trr2');
-        const sems = new Set();
-        rows.forEach(row => {
-          const cells = [...row.querySelectorAll('td')].map(td => td.textContent.trim());
-          // Look for semester info in the cells or surrounding elements
-        });
-        // Alternative: parse all text for year patterns like "2025-2026学年 秋"
-        const allText = doc.documentElement.textContent;
-        const yearSeasons = [...new Set(allText.match(/\d{4}-\d{4}学年\s*(?:秋|春|夏)/g) || [])];
-        if (yearSeasons.length >= 2 && SEM) {
-          yearSeasons.sort();
-          const first = yearSeasons[0].match(/(\d{4})/);
-          if (first) {
-            const enrollYear = parseInt(first[1]);
+    const html = await crossFetch(profileUrl);
+    if (!html) { console.log(TAG, 'profile crossFetch returned null'); return 0; }
+    console.log(TAG, 'profile page fetched, length:', html.length, 'has 所属年级:', html.includes('所属年级'));
+    if (html.includes('所属年级')) {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const cells = [...doc.querySelectorAll('td')].map(td => td.textContent.trim());
+      for (let i = 0; i < cells.length - 1; i++) {
+        if (/所属年级/.test(cells[i])) {
+          const ym = cells[i + 1].match(/(\d{4})/);
+          if (ym && SEM) {
+            const enrollYear = parseInt(ym[1]);
             const sm = SEM.match(/(\d{4})-\d+-(\d)/);
-            if (sm) {
+            if (sm && enrollYear >= 2020) {
               const totalSem = (parseInt(sm[1]) - enrollYear) * 2 + parseInt(sm[2]);
               const grade = Math.max(1, Math.min(4, Math.ceil(totalSem / 2)));
-              console.log(TAG, 'grade from full plan: first semester', yearSeasons[0], '→', grade);
+              console.log(TAG, 'grade from profile: 所属年级', enrollYear, '→', grade);
               return grade;
             }
           }
@@ -126,10 +90,8 @@ async function fetchGradeFromProfile() {
       }
     }
   } catch(e) {
-    console.log(TAG, 'full plan fetch:', e.message);
+    console.log(TAG, 'profile fetch error:', e.message);
   }
-
-  console.log(TAG, 'all grade detection methods failed');
   return 0;
 }
 
