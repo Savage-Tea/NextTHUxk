@@ -16,7 +16,7 @@ const SP = 'nextthuxk_';
 let SEM = (location.href.match(/p_xnxq=([^&]+)/) || [,''])[1];
 let GRADE = 0; // 1=大一 2=大二 3=大三 4=大四
 const BASE = location.origin;
-const DATA_VER = 3; // bump when data structure changes
+const DATA_VER = 4; // bump when data structure changes
 const isZhjwxk = location.hostname === 'zhjwxk.cic.tsinghua.edu.cn';
 const isZhjw   = location.hostname === 'zhjw.cic.tsinghua.edu.cn';
 
@@ -55,55 +55,81 @@ async function fetchPage(url, opts = {}) {
 
 // ─── §6. Data Layer ───────────────────────────────────────
 async function fetchGradeFromProfile() {
-  // Try to get enrollment year from student profile page
-  const urls = [
-    'https://zhjw.cic.tsinghua.edu.cn/jxmh.do?url=/jxmh.do&m=bks_ShowBksXx',
+  // Strategy 1: Get enrollment year from student profile page (所属年级 field)
+  const profileUrls = [
     `${BASE}/jxmh.do?url=/jxmh.do&m=bks_ShowBksXx`,
+    'https://zhjw.cic.tsinghua.edu.cn/jxmh.do?url=/jxmh.do&m=bks_ShowBksXx',
   ];
-  for (const url of urls) {
+  for (const url of profileUrls) {
     try {
       const html = await fetchPage(url);
-      const doc = new DOMParser().parseFromString(html, 'text/html');
-      // Look for enrollment year / grade in table cells
-      const cells = [...doc.querySelectorAll('td')].map(td => td.textContent.trim());
-      // Common patterns: "入学时间" "年级" "nj" "级"
-      for (let i = 0; i < cells.length; i++) {
-        const c = cells[i];
-        if (/入学时间|入学日期|rxrq/i.test(c) && cells[i+1]) {
-          const ym = cells[i+1].match(/(\d{4})/);
-          if (ym) {
-            const enrollYear = parseInt(ym[1]);
-            if (enrollYear >= 2020 && enrollYear <= 2030 && SEM) {
-              const sm = SEM.match(/(\d{4})-\d+-(\d)/);
-              if (sm) {
-                const curYear = parseInt(sm[1]);
-                const curSeason = parseInt(sm[2]);
-                const totalSem = (curYear - enrollYear) * 2 + curSeason;
-                return Math.max(1, Math.min(4, Math.ceil(totalSem / 2)));
+      if (html.includes('所属年级')) {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const cells = [...doc.querySelectorAll('td')].map(td => td.textContent.trim());
+        for (let i = 0; i < cells.length - 1; i++) {
+          if (/所属年级/.test(cells[i])) {
+            const ym = cells[i + 1].match(/(\d{4})/);
+            if (ym) {
+              const enrollYear = parseInt(ym[1]);
+              if (enrollYear >= 2020 && enrollYear <= 2030 && SEM) {
+                const sm = SEM.match(/(\d{4})-\d+-(\d)/);
+                if (sm) {
+                  const totalSem = (parseInt(sm[1]) - enrollYear) * 2 + parseInt(sm[2]);
+                  const grade = Math.max(1, Math.min(4, Math.ceil(totalSem / 2)));
+                  console.log(TAG, 'grade from profile 所属年级:', enrollYear, '→', grade);
+                  return grade;
+                }
               }
             }
           }
         }
-        // Also check for "级" pattern like "2025级"
-        if (/^(\d{4})级/.test(c)) {
-          const enrollYear = parseInt(RegExp.$1);
-          if (enrollYear >= 2020 && enrollYear <= 2030 && SEM) {
+      } else {
+        console.log(TAG, 'profile page has no 所属年级, skipping (length:', html.length, ')');
+      }
+    } catch(e) {
+      console.log(TAG, 'profile fetch:', url, e.message);
+    }
+  }
+
+  // Strategy 2: Get full training plan from zhjw (all semesters, not just current)
+  try {
+    const zhjwBase = location.protocol + '//zhjw.cic.tsinghua.edu.cn';
+    const listHtml = await fetchPage(`${zhjwBase}/jhBks.vjhBksPyfakcbBs.do?m=grPyfabks&theRole=bks&theModule=pyfa`);
+    if (!listHtml.includes('accessDenied') && listHtml.length > 500) {
+      const m = /fajhh=(\d+)/.exec(listHtml);
+      if (m) {
+        const fullHtml = await fetchPage(`${zhjwBase}/jhBks.vjhBksPyfakcbBs.do?m=index2&theModule=pyfa&p_fajhh=${m[1]}`);
+        const doc = new DOMParser().parseFromString(fullHtml, 'text/html');
+        const rows = doc.querySelectorAll('#content_1 table tbody tr.trr2');
+        const sems = new Set();
+        rows.forEach(row => {
+          const cells = [...row.querySelectorAll('td')].map(td => td.textContent.trim());
+          // Look for semester info in the cells or surrounding elements
+        });
+        // Alternative: parse all text for year patterns like "2025-2026学年 秋"
+        const allText = doc.documentElement.textContent;
+        const yearSeasons = [...new Set(allText.match(/\d{4}-\d{4}学年\s*(?:秋|春|夏)/g) || [])];
+        if (yearSeasons.length >= 2 && SEM) {
+          yearSeasons.sort();
+          const first = yearSeasons[0].match(/(\d{4})/);
+          if (first) {
+            const enrollYear = parseInt(first[1]);
             const sm = SEM.match(/(\d{4})-\d+-(\d)/);
             if (sm) {
-              const curYear = parseInt(sm[1]);
-              const curSeason = parseInt(sm[2]);
-              const totalSem = (curYear - enrollYear) * 2 + curSeason;
-              return Math.max(1, Math.min(4, Math.ceil(totalSem / 2)));
+              const totalSem = (parseInt(sm[1]) - enrollYear) * 2 + parseInt(sm[2]);
+              const grade = Math.max(1, Math.min(4, Math.ceil(totalSem / 2)));
+              console.log(TAG, 'grade from full plan: first semester', yearSeasons[0], '→', grade);
+              return grade;
             }
           }
         }
       }
-      // Dump all cells for debugging
-      console.log(TAG, 'profile page cells:', cells.slice(0, 30).join(' | '));
-    } catch(e) {
-      console.log(TAG, 'profile fetch from', url, ':', e.message);
     }
+  } catch(e) {
+    console.log(TAG, 'full plan fetch:', e.message);
   }
+
+  console.log(TAG, 'all grade detection methods failed');
   return 0;
 }
 
@@ -1610,7 +1636,7 @@ function fmtTime(ts) {
   return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-const CUR_VER = '1.0.2';
+const CUR_VER = '1.0.3';
 let updateTimer = null;
 
 function cmpVer(a, b) {
@@ -1683,15 +1709,11 @@ async function launch() {
     if (GRADE) console.log(TAG, 'grade detected from profile:', GRADE);
   }
   if (!GRADE) {
-    // Will try to infer from plan after data loads
+    // Will try to infer from profile page or plan data after load
   }
-  if (!GRADE) {
-    const g = prompt('请输入你的年级（1=大一 2=大二 3=大三 4=大四）：');
-    if (g) GRADE = Math.max(1, Math.min(4, parseInt(g) || 0));
-  }
-  await store.set('grade', GRADE);
+  // Don't prompt here - wait for data to load and try better methods first
   const gradeBtn = $('nextthuxk-grade');
-  if (gradeBtn) gradeBtn.textContent = ['', '大一', '大二', '大三', '大四'][GRADE] || '大?';
+  if (gradeBtn) gradeBtn.textContent = GRADE ? ['', '大一', '大二', '大三', '大四'][GRADE] : '检测中...';
   const listEl = $('nextthuxk-list');
   listEl.innerHTML = '<div class="nx-empty"><span class="nx-spin"></span>&ensp;正在获取数据…</div>';
   try {
@@ -1750,26 +1772,14 @@ async function launch() {
     renderCourses(allCourses);
     renderPlan(planData);
 
-    // Auto-detect grade from training plan if not set
-    if (!GRADE && planData.length && SEM) {
-      const sems = [...new Set(planData.map(p => p.semester).filter(Boolean))];
-      // Find first semester in plan (e.g., "2024-2025学年 秋")
-      const firstSem = sems[0];
-      const m = firstSem?.match(/(\d{4})-\d{4}学年\s*(秋|春)/);
-      if (m) {
-        const enrollYear = parseInt(m[1]);
-        const semM = SEM.match(/(\d{4})-(\d{4})-(\d)/);
-        if (semM) {
-          const curYear = parseInt(semM[1]);
-          const curSeason = parseInt(semM[3]); // 1=秋 2=春
-          // 秋季=第1学期，春季=第2学期
-          const totalSemesters = (curYear - enrollYear) * 2 + curSeason;
-          GRADE = Math.max(1, Math.min(4, Math.ceil(totalSemesters / 2)));
-          await store.set('grade', GRADE);
-          const gradeBtn = $('nextthuxk-grade');
-          if (gradeBtn) gradeBtn.textContent = ['', '大一', '大二', '大三', '大四'][GRADE];
-          console.log(TAG, 'auto-detected grade:', GRADE, '(enrolled', enrollYear, ', current', SEM, ')');
-        }
+    // Final fallback: if still no grade after profile fetch, prompt
+    if (!GRADE) {
+      const g = prompt('无法自动检测年级，请输入（1=大一 2=大二 3=大三 4=大四）：');
+      if (g) {
+        GRADE = Math.max(1, Math.min(4, parseInt(g) || 0));
+        await store.set('grade', GRADE);
+        const gradeBtn2 = $('nextthuxk-grade');
+        if (gradeBtn2) gradeBtn2.textContent = ['', '大一', '大二', '大三', '大四'][GRADE] || '大?';
       }
     }
 
