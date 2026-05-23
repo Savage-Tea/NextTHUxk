@@ -15,6 +15,7 @@ console.log(TAG, 'loading on', location.href);
 const SP = 'nextthuxk_';
 let SEM = (location.href.match(/p_xnxq=([^&]+)/) || [,''])[1];
 const BASE = location.origin;
+const DATA_VER = 2; // bump when data structure changes (e.g. adding volSports)
 const isZhjwxk = location.hostname === 'zhjwxk.cic.tsinghua.edu.cn';
 const isZhjw   = location.hostname === 'zhjw.cic.tsinghua.edu.cn';
 
@@ -235,26 +236,30 @@ async function fetchVolunteer() {
     console.log(TAG, 'volunteer data:', Object.keys(allMap).length, 'courses');
 
     // Sports volunteer: tbzySearchTy (体育课志愿，独立页面)
-    const sportsMap = {};
-    for (let p = -1; p <= 20; p++) {
-      const url = p === -1
-        ? `${BASE}/xkBks.xkBksZytjb.do?m=tbzySearchTy&p_xnxq=${SEM}`
-        : `${BASE}/xkBks.xkBksZytjb.do?m=tbzySearchTy&p_xnxq=${SEM}&page=${p}`;
-      const html = await fetchPage(url);
-      const batch = parseVolSportsFromHtml(html);
-      if (!Object.keys(batch).length && p >= 0) break;
-      Object.assign(sportsMap, batch);
-      if (p > 0 && !Object.keys(batch).length) break;
-    }
-    // Merge sports data into allMap
-    for (const [key, val] of Object.entries(sportsMap)) {
-      if (allMap[key]) {
-        Object.assign(allMap[key], val);
-      } else {
-        allMap[key] = val;
+    try {
+      const sportsMap = {};
+      for (let p = -1; p <= 20; p++) {
+        const url = p === -1
+          ? `${BASE}/xkBks.xkBksZytjb.do?m=tbzySearchTy&p_xnxq=${SEM}`
+          : `${BASE}/xkBks.xkBksZytjb.do?m=tbzySearchTy&p_xnxq=${SEM}&page=${p}`;
+        const html = await fetchPage(url);
+        const batch = parseVolSportsFromHtml(html);
+        if (!Object.keys(batch).length && p >= 0) break;
+        Object.assign(sportsMap, batch);
+        if (p > 0 && !Object.keys(batch).length) break;
       }
-    }
-    console.log(TAG, 'sports volunteer data:', Object.keys(sportsMap).length, 'courses');
+      // Merge sports data into allMap
+      for (const [key, val] of Object.entries(sportsMap)) {
+        if (allMap[key]) {
+          Object.assign(allMap[key], val);
+        } else {
+          allMap[key] = val;
+        }
+      }
+      console.log(TAG, 'sports volunteer data:', Object.keys(sportsMap).length, 'courses');
+      const sampleKey = Object.keys(sportsMap)[0];
+      if (sampleKey) console.log(TAG, 'sample sports vol:', sampleKey, JSON.stringify(sportsMap[sampleKey]));
+    } catch(e) { console.warn(TAG, 'sports volunteer fetch:', e); }
     return allMap;
   } catch(e) { console.warn(TAG, 'volunteer fetch:', e); return {}; }
 }
@@ -1560,6 +1565,12 @@ async function launch() {
   try {
     // 1) Load static cache (catalog + plan, never auto-refresh)
     let sd = await store.get('staticData');
+    // Force refresh if data structure version changed
+    if (sd && sd.ver !== DATA_VER) {
+      console.log(TAG, 'data version mismatch, clearing cache');
+      sd = null;
+      await store.set('staticData', null);
+    }
     const needCatalog = !sd || !sd.catalog || sd.catalog.length < 100;
 
     // 2) Check if volunteer data needs refresh (16:00 / 20:00 schedule)
@@ -1585,7 +1596,7 @@ async function launch() {
       volTs = Date.now();
     }
     // Save cache
-    sd = { plan, catalog, volData, volTs, ts: sd?.ts || Date.now() };
+    sd = { ver: DATA_VER, plan, catalog, volData, volTs, ts: sd?.ts || Date.now() };
     if (needCatalog) sd.ts = Date.now();
     await store.set('staticData', sd);
 
