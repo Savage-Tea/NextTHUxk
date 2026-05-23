@@ -54,6 +54,59 @@ async function fetchPage(url, opts = {}) {
 }
 
 // ─── §6. Data Layer ───────────────────────────────────────
+async function fetchGradeFromProfile() {
+  // Try to get enrollment year from student profile page
+  const urls = [
+    'https://zhjw.cic.tsinghua.edu.cn/jxmh.do?url=/jxmh.do&m=bks_ShowBksXx',
+    `${BASE}/jxmh.do?url=/jxmh.do&m=bks_ShowBksXx`,
+  ];
+  for (const url of urls) {
+    try {
+      const html = await fetchPage(url);
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      // Look for enrollment year / grade in table cells
+      const cells = [...doc.querySelectorAll('td')].map(td => td.textContent.trim());
+      // Common patterns: "入学时间" "年级" "nj" "级"
+      for (let i = 0; i < cells.length; i++) {
+        const c = cells[i];
+        if (/入学时间|入学日期|rxrq/i.test(c) && cells[i+1]) {
+          const ym = cells[i+1].match(/(\d{4})/);
+          if (ym) {
+            const enrollYear = parseInt(ym[1]);
+            if (enrollYear >= 2020 && enrollYear <= 2030 && SEM) {
+              const sm = SEM.match(/(\d{4})-\d+-(\d)/);
+              if (sm) {
+                const curYear = parseInt(sm[1]);
+                const curSeason = parseInt(sm[2]);
+                const totalSem = (curYear - enrollYear) * 2 + curSeason;
+                return Math.max(1, Math.min(4, Math.ceil(totalSem / 2)));
+              }
+            }
+          }
+        }
+        // Also check for "级" pattern like "2025级"
+        if (/^(\d{4})级/.test(c)) {
+          const enrollYear = parseInt(RegExp.$1);
+          if (enrollYear >= 2020 && enrollYear <= 2030 && SEM) {
+            const sm = SEM.match(/(\d{4})-\d+-(\d)/);
+            if (sm) {
+              const curYear = parseInt(sm[1]);
+              const curSeason = parseInt(sm[2]);
+              const totalSem = (curYear - enrollYear) * 2 + curSeason;
+              return Math.max(1, Math.min(4, Math.ceil(totalSem / 2)));
+            }
+          }
+        }
+      }
+      // Dump all cells for debugging
+      console.log(TAG, 'profile page cells:', cells.slice(0, 30).join(' | '));
+    } catch(e) {
+      console.log(TAG, 'profile fetch from', url, ':', e.message);
+    }
+  }
+  return 0;
+}
+
 async function fetchTrainingPlan() {
   if (isZhjwxk) {
     const html = await fetchPage(`${BASE}/jhBks.vjhBksPyfakcbBs.do?m=showBksZxZdxjxjhXmxqkclist&p_xnxq=${SEM}`);
@@ -1623,10 +1676,14 @@ async function launch() {
   await store.set('sem', SEM);
   const semBtn = $('nextthuxk-sem');
   if (semBtn) semBtn.textContent = SEM;
-  // Resolve grade: stored > infer from training plan > prompt
+  // Resolve grade: stored > profile page > plan inference > prompt
   GRADE = (await store.get('grade')) || 0;
-  if (!GRADE && SEM) {
-    // Will try to infer after plan data is loaded
+  if (!GRADE) {
+    GRADE = await fetchGradeFromProfile();
+    if (GRADE) console.log(TAG, 'grade detected from profile:', GRADE);
+  }
+  if (!GRADE) {
+    // Will try to infer from plan after data loads
   }
   if (!GRADE) {
     const g = prompt('请输入你的年级（1=大一 2=大二 3=大三 4=大四）：', '3') || '3';
