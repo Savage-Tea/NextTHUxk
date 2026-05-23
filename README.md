@@ -4,16 +4,25 @@
 
 ## 安装
 
-1. 打开浏览器（Chrome / Edge / Arc 等均可），地址栏输入扩展管理页：
+### 方式一：.crx 一键安装（推荐）
+
+1. 从 [Releases](https://github.com/smartThise/NextTHUxk/releases) 下载 `NextTHUxk.crx`
+2. 浏览器打开扩展管理页：
    - Chrome / Arc：`chrome://extensions`
    - Edge：`edge://extensions`
    - 其他 Chromium 浏览器：`chrome://extensions`（通用）
-2. 右上角开启「开发者模式」
-3. 点击「加载已解压的扩展程序」，选择本文件夹
-4. 进入清华选课网站（zhjwxk.cic.tsinghua.edu.cn 或 zhjw.cic.tsinghua.edu.cn），右下角出现 ✨ 按钮
-5. 点击 ✨ 即可打开全屏工作台
+3. 右上角开启「开发者模式」
+4. 将 .crx 文件拖入浏览器窗口，确认安装
 
-> 也可以直接从 [Releases](https://github.com/smartThise/NextTHUxk/releases) 下载 `.zip` 包解压后加载。
+### 方式二：解压加载
+
+1. 从 [Releases](https://github.com/smartThise/NextTHUxk/releases) 下载 `NextTHUxk.zip` 并解压
+2. 浏览器打开扩展管理页，开启「开发者模式」
+3. 点击「加载已解压的扩展程序」，选择解压后的文件夹
+
+## 使用
+
+进入清华选课网站（zhjwxk.cic.tsinghua.edu.cn 或 zhjw.cic.tsinghua.edu.cn），右下角出现 ✨ 按钮，点击即可打开全屏工作台。
 
 ## 功能概览
 
@@ -76,7 +85,7 @@
 ## 数据与隐私
 
 - 选课操作走原系统表单提交，与手动操作完全等价
-- 个人数据（草稿、API 配置等）全部存储在浏览器本地（chrome.storage）
+- 个人数据（草稿、API 配置等）全部存储在浏览器本地
 - 扩展代码中不包含任何个人数据
 - 课程目录和志愿数据有缓存机制：
   - 课程目录：首次加载后缓存，手动刷新时更新
