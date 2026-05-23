@@ -4,11 +4,16 @@
 
 ## 安装
 
-1. 打开 Chrome，地址栏输入 `chrome://extensions`
+1. 打开浏览器（Chrome / Edge / Arc 等均可），地址栏输入扩展管理页：
+   - Chrome / Arc：`chrome://extensions`
+   - Edge：`edge://extensions`
+   - 其他 Chromium 浏览器：`chrome://extensions`（通用）
 2. 右上角开启「开发者模式」
 3. 点击「加载已解压的扩展程序」，选择本文件夹
 4. 进入清华选课网站（zhjwxk.cic.tsinghua.edu.cn 或 zhjw.cic.tsinghua.edu.cn），右下角出现 ✨ 按钮
 5. 点击 ✨ 即可打开全屏工作台
+
+> 也可以直接从 [Releases](https://github.com/smartThise/NextTHUxk/releases) 下载 `.zip` 包解压后加载。
 
 ## 功能概览
 
@@ -87,8 +92,7 @@
 ## 文件结构
 
 ```
-extension/
-├── manifest.json    # Chrome 扩展配置 (Manifest V3)
+├── manifest.json    # 浏览器扩展配置 (Manifest V3)
 ├── content.js       # 主逻辑（全部功能 ~1600 行）
 ├── content.css      # 样式（备用）
 ├── popup.html       # 扩展弹出页
