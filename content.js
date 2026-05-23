@@ -14,6 +14,7 @@ console.log(TAG, 'loading on', location.href);
 // ─── §2. Config ───────────────────────────────────────────
 const SP = 'nextthuxk_';
 let SEM = (location.href.match(/p_xnxq=([^&]+)/) || [,''])[1];
+let GRADE = 0; // 1=大一 2=大二 3=大三 4=大四
 const BASE = location.origin;
 const DATA_VER = 2; // bump when data structure changes (e.g. adding volSports)
 const isZhjwxk = location.hostname === 'zhjwxk.cic.tsinghua.edu.cn';
@@ -238,15 +239,11 @@ async function fetchVolunteer() {
     // Sports volunteer: tbzySearchTy (体育课志愿，独立页面)
     try {
       const sportsMap = {};
-      const sportsUrl = `${BASE}/xkBks.xkBksZytjb.do?m=tbzySearchTy&p_xnxq=${SEM}`;
-      console.log(TAG, 'fetching sports volunteer from:', sportsUrl);
-      const sportsHtml = await fetchPage(sportsUrl);
-      console.log(TAG, 'sports volunteer page length:', sportsHtml.length, 'has gridData:', sportsHtml.includes('gridData'));
       for (let p = -1; p <= 20; p++) {
         const url = p === -1
-          ? sportsUrl
+          ? `${BASE}/xkBks.xkBksZytjb.do?m=tbzySearchTy&p_xnxq=${SEM}`
           : `${BASE}/xkBks.xkBksZytjb.do?m=tbzySearchTy&p_xnxq=${SEM}&page=${p}`;
-        const html = p === -1 ? sportsHtml : await fetchPage(url);
+        const html = await fetchPage(url);
         const batch = parseVolSportsFromHtml(html);
         if (!Object.keys(batch).length && p >= 0) break;
         Object.assign(sportsMap, batch);
@@ -261,8 +258,6 @@ async function fetchVolunteer() {
         }
       }
       console.log(TAG, 'sports volunteer data:', Object.keys(sportsMap).length, 'courses');
-      const sampleKey = Object.keys(sportsMap)[0];
-      if (sampleKey) console.log(TAG, 'sample sports vol:', sampleKey, JSON.stringify(sportsMap[sampleKey]));
     } catch(e) { console.warn(TAG, 'sports volunteer fetch:', e); }
     return allMap;
   } catch(e) { console.warn(TAG, 'volunteer fetch:', e); return {}; }
@@ -605,7 +600,9 @@ const HTML = `
       <div style="display:flex;gap:8px;align-items:center">
         <span id="nextthuxk-cache-info" style="font-size:11px;color:#86868b"></span>
         <button id="nextthuxk-sem" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(124,106,239,.3);background:rgba(124,106,239,.08);color:#7c6aef;font-size:11px;cursor:pointer;font-family:inherit;font-weight:600" title="点击修改学期"></button>
+        <button id="nextthuxk-grade" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(52,199,89,.3);background:rgba(52,199,89,.08);color:#34c759;font-size:11px;cursor:pointer;font-family:inherit;font-weight:600" title="点击修改年级"></button>
         <button id="nextthuxk-refresh" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(0,0,0,.1);background:#fff;font-size:11px;cursor:pointer;font-family:inherit">🔄 刷新数据</button>
+        <button id="nextthuxk-check-update" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(0,0,0,.1);background:#fff;font-size:11px;cursor:pointer;font-family:inherit">🔔 检查更新</button>
         <button class="nx-exit" id="nextthuxk-exit">❌ 返回原选课系统</button>
       </div>
     </div>
@@ -1433,6 +1430,10 @@ async function callAI() {
     const draftsInfo = savedDrafts.map(d => ({name:d.name,courses:d.courses.map(c=>({name:c.name,code:c.code,seq:c.seq,time:c.time,flag:c.flag,zy:c.zy,credits:c.credits}))}));
     const prompt = `你是清华大学选课AI助手。请根据以下信息推荐最优选课方案，确保无时间冲突。
 
+## 用户信息
+- 当前年级：${'大一大二大三大四'[GRADE-1] || '未知'}（第${GRADE}年本科）
+- 当前学期：${SEM}
+
 ## 本学期可选的必修课和体育课（时间格式：星期-大节(周次)，如 3-2(全周) 表示周三第2大节）
 ${JSON.stringify(bxTyCourses,null,1)}
 
@@ -1445,7 +1446,11 @@ ${draftsInfo.length ? JSON.stringify(draftsInfo,null,1) : '无'}
 ## 用户偏好
 ${pref||'无特殊偏好，请合理推荐'}
 
-请根据已有课表的时间空隙，从必修课和体育课中选择合适的课程组合。对于任选课和通识课，不需要逐门搜索，只需根据已有课表的空闲时段给出选课方向建议即可。
+重要约束：
+1. 只推荐与用户年级匹配的课程。例如大三学生不应选大一大二的体育课(如体育(1)、体育(2))，应选体育(3)或以上。
+2. 课程名中的数字通常表示年级段：体育(1)=大一体育，体育(2)=大二体育，体育(3)=大三体育。
+3. 请根据已有课表的时间空隙，从必修课和体育课中选择合适的课程组合。
+4. 对于任选课和通识课，不需要逐门搜索，只需根据已有课表的空闲时段给出选课方向建议即可。
 
 返回纯JSON（不要markdown代码块），格式：
 {"courses":[{"code":"课号","seq":"课序","name":"课名","credits":3,"time":"3-2(全周)","teacher":"教师","flag":"bx","zy":3,"reason":"推荐理由"}],"total_credits":30,"summary":"整体分析","suggestions":["对任选/通识课的建议"]}
@@ -1552,6 +1557,60 @@ function fmtTime(ts) {
   return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
+const CUR_VER = '1.0.1';
+let updateTimer = null;
+
+function cmpVer(a, b) {
+  const pa = a.replace(/^v/,'').split('.').map(Number);
+  const pb = b.replace(/^v/,'').split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i]||0) > (pb[i]||0)) return 1;
+    if ((pa[i]||0) < (pb[i]||0)) return -1;
+  }
+  return 0;
+}
+
+async function checkUpdate() {
+  try {
+    const lastCheck = await store.get('lastUpdateCheck');
+    if (lastCheck && Date.now() - lastCheck < 30 * 60 * 1000) return; // 30 min cooldown
+    const resp = await fetch('https://api.github.com/repos/smartThise/NextTHUxk/releases/latest', { cache: 'no-store' });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    await store.set('lastUpdateCheck', Date.now());
+    const remote = (data.tag_name || '').replace(/^v/,'');
+    if (remote && cmpVer(remote, CUR_VER) > 0) {
+      showUpdateBanner(remote, data.html_url);
+    }
+  } catch(e) { /* silent */ }
+  // Periodic re-check every 30 min while panel is open
+  if (!updateTimer) {
+    updateTimer = setInterval(() => {
+      store.set('lastUpdateCheck', 0);
+      checkUpdate();
+    }, 30 * 60 * 1000);
+  }
+}
+
+function showUpdateBanner(ver, url) {
+  const existing = $('nextthuxk-update-banner');
+  if (existing) return;
+  const db = $('nextthuxk-dashboard');
+  if (!db) return;
+  const banner = document.createElement('div');
+  banner.id = 'nextthuxk-update-banner';
+  banner.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:linear-gradient(90deg,#667eea,#764ba2);color:#fff;font-size:13px;border-radius:8px;margin:8px 0;">
+      <span>发现新版本 v${esc(ver)}，建议更新获取最新功能与修复</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <a href="${url}" target="_blank" style="color:#fff;background:rgba(255,255,255,0.2);padding:4px 12px;border-radius:4px;text-decoration:none;font-size:12px;">前往下载</a>
+        <button id="nextthuxk-update-close" style="background:none;border:none;color:#fff;cursor:pointer;font-size:16px;line-height:1;">✕</button>
+      </div>
+    </div>`;
+  db.prepend(banner);
+  $('nextthuxk-update-close').onclick = () => banner.remove();
+}
+
 async function launch() {
   toggle(true);
   // Resolve semester: URL param > stored > prompt
@@ -1564,6 +1623,18 @@ async function launch() {
   await store.set('sem', SEM);
   const semBtn = $('nextthuxk-sem');
   if (semBtn) semBtn.textContent = SEM;
+  // Resolve grade: stored > infer from training plan > prompt
+  GRADE = (await store.get('grade')) || 0;
+  if (!GRADE && SEM) {
+    // Will try to infer after plan data is loaded
+  }
+  if (!GRADE) {
+    const g = prompt('请输入你的年级（1=大一 2=大二 3=大三 4=大四）：', '3') || '3';
+    GRADE = Math.max(1, Math.min(4, parseInt(g) || 3));
+  }
+  await store.set('grade', GRADE);
+  const gradeBtn = $('nextthuxk-grade');
+  if (gradeBtn) gradeBtn.textContent = ['', '大一', '大二', '大三', '大四'][GRADE] || '大?';
   const listEl = $('nextthuxk-list');
   listEl.innerHTML = '<div class="nx-empty"><span class="nx-spin"></span>&ensp;正在获取数据…</div>';
   try {
@@ -1620,6 +1691,29 @@ async function launch() {
     renderCourses(allCourses);
     renderPlan(planData);
 
+    // Auto-detect grade from training plan if not set
+    if (!GRADE && planData.length && SEM) {
+      const sems = [...new Set(planData.map(p => p.semester).filter(Boolean))];
+      // Find first semester in plan (e.g., "2024-2025学年 秋")
+      const firstSem = sems[0];
+      const m = firstSem?.match(/(\d{4})-\d{4}学年\s*(秋|春)/);
+      if (m) {
+        const enrollYear = parseInt(m[1]);
+        const semM = SEM.match(/(\d{4})-(\d{4})-(\d)/);
+        if (semM) {
+          const curYear = parseInt(semM[1]);
+          const curSeason = parseInt(semM[3]); // 1=秋 2=春
+          // 秋季=第1学期，春季=第2学期
+          const totalSemesters = (curYear - enrollYear) * 2 + curSeason;
+          GRADE = Math.max(1, Math.min(4, Math.ceil(totalSemesters / 2)));
+          await store.set('grade', GRADE);
+          const gradeBtn = $('nextthuxk-grade');
+          if (gradeBtn) gradeBtn.textContent = ['', '大一', '大二', '大三', '大四'][GRADE];
+          console.log(TAG, 'auto-detected grade:', GRADE, '(enrolled', enrollYear, ', current', SEM, ')');
+        }
+      }
+    }
+
     // Preview timetable from selected courses
     renderPreviewTT(allCourses.filter(c => c.selected), '当前已选');
 
@@ -1648,6 +1742,7 @@ async function launch() {
   } catch(e) {
     listEl.innerHTML = `<div class="nx-empty nx-st err">❌ ${esc(e.message)}</div>`;
   }
+  checkUpdate();
 }
 
 // ─── §15. Events ──────────────────────────────────────────
@@ -1669,6 +1764,33 @@ $('nextthuxk-sem').onclick = async () => {
     $('nextthuxk-sem').textContent = SEM;
     await store.set('staticData', null);
     launch();
+  }
+};
+$('nextthuxk-grade').onclick = async () => {
+  const g = prompt('修改年级（1=大一 2=大二 3=大三 4=大四）：', String(GRADE));
+  if (g) {
+    GRADE = Math.max(1, Math.min(4, parseInt(g) || 3));
+    await store.set('grade', GRADE);
+    $('nextthuxk-grade').textContent = ['', '大一', '大二', '大三', '大四'][GRADE];
+  }
+};
+$('nextthuxk-check-update').onclick = async () => {
+  await store.set('lastUpdateCheck', 0);
+  const btn = $('nextthuxk-check-update');
+  btn.textContent = '⏳ 检查中...';
+  btn.disabled = true;
+  await checkUpdate();
+  btn.textContent = '🔔 检查更新';
+  btn.disabled = false;
+  // If no banner appeared, show "up to date"
+  if (!$('nextthuxk-update-banner')) {
+    const toast = document.createElement('div');
+    toast.id = 'nextthuxk-update-banner';
+    toast.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#34c759;color:#fff;font-size:13px;border-radius:8px;margin:8px 0;">
+      <span>当前已是最新版本 v${CUR_VER}</span>
+      <button onclick="this.closest('#nextthuxk-update-banner').remove()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:16px;">✕</button>
+    </div>`;
+    $('nextthuxk-dashboard')?.prepend(toast);
   }
 };
 shadow.querySelectorAll('.nx-chip').forEach(chip => {
