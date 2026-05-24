@@ -1743,7 +1743,7 @@ $('nextthuxk-sem').onclick = async () => {
   }
 };
 $('nextthuxk-grade').onclick = async () => {
-  const g = prompt('修改年级（1=大一 2=大二 3=大三 4=大四）：', String(GRADE));
+  const g = prompt('修改年级（仅影响 AI 对体育课的推荐，不影响其他功能）\n\n1=大一 2=大二 3=大三 4=大四：', String(GRADE));
   if (g) {
     GRADE = Math.max(1, Math.min(4, parseInt(g) || 3));
     await store.set('grade', GRADE);
