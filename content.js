@@ -932,6 +932,7 @@ function renderCourses(list) {
       if (c.volOptional && c.volOptional !== '0,0,0') { const s = fmtVol(c.volOptional); if (s) volParts.push(`<span>任 ${s}</span>`); }
     }
     const volHtml = volParts.length ? `<div class="nx-vol">${volParts.join('')}</div>` : '';
+    const defFlag = courseFlag(c);
     const volApplied = c.volApplied || 0;
     const volCap = c.volCapacity || c.capacity || 0;
     const compLabel = vc.level === 'easy' ? '竞争宽松' : vc.level === 'medium' ? '竞争适中' : vc.level === 'hard' ? '竞争激烈' : '';
@@ -957,7 +958,6 @@ function renderCourses(list) {
       c.remaining !== undefined ? `余${c.remaining}` : '',
     ].filter(Boolean).join(' · ');
     // Action buttons
-    const defFlag = courseFlag(c);
     let selectBtn;
     if (c.selected) {
       const volLabel = c.zy ? `<span class="nx-vol-info">第${c.zy}志愿 · ${esc(c.typeLabel||'')}</span>` : '';
