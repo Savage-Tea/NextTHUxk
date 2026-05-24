@@ -961,18 +961,11 @@ function renderCourses(list) {
       <div class="nx-comp-bar" style="width:${vc.pct}%;background:${vc.color}"></div>
       <span class="nx-comp-txt" style="color:${vc.color}">${volApplied}/${volCap} · ${compLabel}</span>
     </div>` : '';
-    // Probability calculation
+    // Probability: show all allowed type × zy combinations
     let probHtml = '';
-    if (!c.selected) {
-      const pf = defFlag;
-      const pzy = 3; // default volunteer level for unselected
-      const p = calcProb(c, pf, pzy);
-      if (p.prob >= 0) probHtml = `<div style="margin-top:3px;font-size:10px;font-weight:600;color:${p.color}">中签率 ${p.label}（${pf==='bx'?'必修':pf==='xx'?'限选':pf==='rx'?'任选':'体育'} ${pzy}志愿）</div>`;
-      else if (p.label === '类型不匹配') probHtml = `<div style="margin-top:3px;font-size:10px;color:#86868b">类型不正确，无法计算</div>`;
-    } else if (c.zy) {
-      const sf = c.typeCode==='006'?'bx':c.typeCode==='008'?'xx':c.typeCode==='007'?'rx':c.typeCode==='ty'?'ty':'bx';
-      const p = calcProb(c, sf, c.zy);
-      if (p.prob >= 0) probHtml = `<div style="margin-top:3px;font-size:10px;font-weight:600;color:${p.color}">中签率 ${p.label}（第${c.zy}志愿）</div>`;
+    {
+      const bf = isSportsCourse(c) ? 'ty' : defFlag;
+      probHtml = fullProbGrid(c, bf);
     }
     const detail = [
       c.capacity ? `容量${c.capacity}` : '',
@@ -1161,6 +1154,26 @@ function calcProb(course, flag, zy) {
   return { prob, label: pctLabel, color };
 }
 
+// Generate full probability grid for a course showing all allowed type × zy combinations
+function fullProbGrid(courseOrAc, bf) {
+  const aFlags = allowedFlags(bf);
+  const flagName = f => f==='bx'?'必修':f==='xx'?'限选':f==='rx'?'任选':'体育';
+  const rows = [];
+  for (const f of aFlags) {
+    const cells = [];
+    for (let z = 1; z <= 3; z++) {
+      const p = calcProb(courseOrAc, f, z);
+      if (p.prob >= 0) {
+        cells.push(`<span style="color:${p.color};font-weight:600">${z}志愿:${p.label}</span>`);
+      } else {
+        cells.push(`<span style="color:#86868b">${z}志愿:${p.label}</span>`);
+      }
+    }
+    rows.push(`<span style="color:#86868b;font-size:9px">${flagName(f)}</span> ${cells.join(' ')}`);
+  }
+  return rows.length ? `<div style="margin-top:3px;line-height:1.4;font-size:9px">${rows.join('<br>')}</div>` : '';
+}
+
 function showXkResult(res) {
   let toast = $('nextthuxk-toast');
   if (!toast) return;
@@ -1297,9 +1310,8 @@ async function handlePreviewRemove(code, seq) {
 function stageProbHtml(c) {
   const ac = allCourses.find(x => x.code === c.code && String(x.seq||'0') === String(c.seq||'0'));
   if (!ac) return '';
-  const p = calcProb(ac, c.flag, c.zy);
-  if (p.prob < 0) return `<span style="font-size:9px;color:#86868b">${p.label}</span>`;
-  return `<span style="font-size:9px;font-weight:600;color:${p.color}">中签${p.label}</span>`;
+  const bf = c.baseFlag || baseFlag(ac);
+  return fullProbGrid(ac, bf).replace(/margin-top:3px/, 'margin-top:2px');
 }
 
 function renderStageCart() {
@@ -1317,13 +1329,15 @@ function renderStageCart() {
       `<option value="${z}"${c.zy===z?' selected':''}>${z}志愿</option>`
     ).join('');
     const prob = stageProbHtml(c);
-    return `<div class="nx-stage-item" style="flex-wrap:wrap;gap:4px">
-      <span class="nx-stage-name" style="min-width:80px">${esc(c.name)}${c.teacher?' <span style="color:#86868b;font-weight:400">'+esc(c.teacher)+'</span>':''}</span>
-      <span class="nx-stage-info">${c.credits}学分</span>
-      <select class="nx-stage-flag-sel" data-idx="${i}" style="padding:2px 4px;border-radius:6px;border:1px solid rgba(0,0,0,.1);font-size:10px;font-family:inherit;background:#fff;cursor:pointer">${flOpts}</select>
-      <select class="nx-stage-zy-sel" data-idx="${i}" style="padding:2px 4px;border-radius:6px;border:1px solid rgba(0,0,0,.1);font-size:10px;font-family:inherit;background:#fff;cursor:pointer">${zyOpts}</select>
+    return `<div class="nx-stage-item" style="flex-direction:column;align-items:stretch;gap:2px">
+      <div style="display:flex;align-items:center;gap:4px">
+        <span class="nx-stage-name" style="min-width:80px">${esc(c.name)}${c.teacher?' <span style="color:#86868b;font-weight:400">'+esc(c.teacher)+'</span>':''}</span>
+        <span class="nx-stage-info">${c.credits}学分</span>
+        <select class="nx-stage-flag-sel" data-idx="${i}" style="padding:2px 4px;border-radius:6px;border:1px solid rgba(0,0,0,.1);font-size:10px;font-family:inherit;background:#fff;cursor:pointer">${flOpts}</select>
+        <select class="nx-stage-zy-sel" data-idx="${i}" style="padding:2px 4px;border-radius:6px;border:1px solid rgba(0,0,0,.1);font-size:10px;font-family:inherit;background:#fff;cursor:pointer">${zyOpts}</select>
+        <button class="nx-stage-rm" data-idx="${i}">✕</button>
+      </div>
       ${prob}
-      <button class="nx-stage-rm" data-idx="${i}">✕</button>
     </div>`;
   }).join('');
   el.querySelectorAll('.nx-stage-flag-sel').forEach(sel => {
@@ -1364,9 +1378,8 @@ let expandedDraft = -1;
 function draftCourseProbHtml(c) {
   const ac = allCourses.find(x => x.code === c.code && String(x.seq||'0') === String(c.seq||'0'));
   if (!ac) return '';
-  const p = calcProb(ac, c.flag, c.zy);
-  if (p.prob < 0) return `<span style="font-size:9px;color:#86868b">${p.label}</span>`;
-  return `<span style="font-size:9px;font-weight:600;color:${p.color}">中签${p.label}</span>`;
+  const bf = c.baseFlag || baseFlag(ac);
+  return fullProbGrid(ac, bf).replace(/margin-top:3px/, 'margin-top:2px');
 }
 
 function renderDrafts() {
