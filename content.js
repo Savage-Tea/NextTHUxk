@@ -272,7 +272,30 @@ function courseFlag(course) {
   if (a === '限选') return 'xx';
   if (a === '任选') return 'rx';
   if (a === '体育') return 'ty';
-  return 'bx';
+  if (a === '必修') return 'bx';
+  // Not in plan: default to rx (任选)
+  return 'rx';
+}
+
+function isSportsCourse(course) {
+  return (course.attr||'') === '体育'
+    || (course.department||'').includes('体育')
+    || (course.name||'').includes('体育')
+    || course.typeLabel === '体育';
+}
+
+// Base flag determines allowed type options
+// 体育→体育, 必修→必修/限选/任选, 限选→限选/任选, 任选→任选
+function baseFlag(course) {
+  if (isSportsCourse(course)) return 'ty';
+  return courseFlag(course);
+}
+
+function allowedFlags(bf) {
+  if (bf === 'ty') return ['ty'];
+  if (bf === 'bx') return ['bx','xx','rx'];
+  if (bf === 'xx') return ['xx','rx'];
+  return ['rx'];
 }
 
 function iframeFormSubmit(searchUrl, postFields) {
@@ -731,6 +754,7 @@ function addToStage(code, seq, flag, zy) {
   stageCart.push({
     code: c.code, seq: c.seq || '0', name: c.name, teacher: c.teacher || '',
     time: c.time || '', credits: c.credits || 0, flag, zy: parseInt(zy) || 3,
+    baseFlag: baseFlag(c),
   });
   renderStageCart();
   store.set('stageCart', stageCart);
@@ -741,6 +765,7 @@ function removeFromStage(idx) {
   stageCart.splice(idx, 1);
   renderStageCart();
   store.set('stageCart', stageCart);
+  filterCourses();
 }
 
 function askReplaceDraft(name, courses) {
@@ -767,6 +792,7 @@ function saveDraft() {
     stageCart = [];
     if (nameInput) nameInput.value = '';
     renderStageCart(); store.set('stageCart', stageCart);
+    filterCourses();
     showXkResult({ok:true, msg:`草稿「${name}」已保存`});
   }
 }
@@ -778,7 +804,7 @@ function saveSelectedAsDraft() {
     code: c.code, seq: c.seq || '0', name: c.name, teacher: c.teacher || '',
     time: c.time || '', credits: c.credits || 0,
     flag: c.typeCode==='006'?'bx':c.typeCode==='008'?'xx':c.typeCode==='007'?'rx':'bx',
-    zy: c.zy || 3,
+    zy: c.zy || 3, baseFlag: baseFlag(c),
   }));
   const d = new Date();
   const name = `已选课表 ${d.getMonth()+1}/${d.getDate()}`;
@@ -819,30 +845,24 @@ function zyTypeOf(course) {
 }
 
 function canAdjustZy(code, seq, targetZy) {
-  // Count how many courses of each type currently occupy each zy level
   const course = allCourses.find(c => c.code === code && String(c.seq||'0') === String(seq||'0'));
   if (!course) return false;
   const zt = zyTypeOf(course);
-  const limits = ZY_LIMITS[zt] || ZY_LIMITS.bx;
-  const limitEntry = limits.find(l => l[0] === targetZy);
-  if (!limitEntry) return false;
-  const limit = limitEntry[1]; // Infinity means unlimited
-
-  // Count selected courses of same type at targetZy, excluding this course itself
   let count = 0;
   allCourses.forEach(c => {
     if (!c.selected) return;
-    if (c.code === code && String(c.seq||'0') === String(seq||'0')) return; // exclude self
-    if (zyTypeOf(c) !== zt) return; // different type
+    if (c.code === code && String(c.seq||'0') === String(seq||'0')) return;
+    if (zyTypeOf(c) !== zt) return;
     if (c.zy === targetZy) count++;
   });
-  return count < limit;
+  const limits = ZY_LIMITS[zt] || ZY_LIMITS.bx;
+  return count < (limits[targetZy - 1]?.[1] || 0);
 }
 
 function exportDraft(draft) {
   const data = {v: 1, name: draft.name, courses: draft.courses.map(c => ({
     code: c.code, seq: c.seq, name: c.name, teacher: c.teacher, time: c.time,
-    credits: c.credits, flag: c.flag, zy: c.zy,
+    credits: c.credits, flag: c.flag, zy: c.zy, baseFlag: c.baseFlag,
   }))};
   const json = JSON.stringify(data);
   navigator.clipboard.writeText(json).then(
@@ -871,6 +891,7 @@ function importToStage(jsonStr) {
         stageCart.push({
           code: c.code, seq: c.seq || '0', name: c.name || '', teacher: c.teacher || '',
           time: c.time || '', credits: c.credits || 0, flag: c.flag || 'bx', zy: c.zy || 3,
+          baseFlag: c.baseFlag || (() => { const ac = allCourses.find(x => x.code === c.code); return ac ? baseFlag(ac) : 'rx'; })(),
         });
         added++;
       }
@@ -970,7 +991,9 @@ function renderCourses(list) {
       selectBtn = `${volLabel}${upBtn}${downBtn}<button class="nx-stage-btn nx-add-stage-sel" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}" data-flag="${sFlag}" data-zy="${c.zy||3}"${inStage?' disabled':''}>${inStage?'已暂存':'暂存'}</button><button class="nx-drop-btn" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}">退选</button>`;
     } else if (c.available) {
       const inStage = stageCart.some(s => s.code === c.code && String(s.seq) === String(c.seq||'0'));
-      selectBtn = `<select class="nx-type-select" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}"><option value="bx"${defFlag==='bx'?' selected':''}>必修</option><option value="xx"${defFlag==='xx'?' selected':''}>限选</option><option value="rx"${defFlag==='rx'?' selected':''}>任选</option><option value="ty"${defFlag==='ty'?' selected':''}>体育</option></select><select class="nx-zy-select" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}"><option value="3">3志愿</option><option value="2">2志愿</option><option value="1">1志愿</option></select><button class="nx-select-btn" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}">选课</button><button class="nx-stage-btn nx-add-stage" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}"${inStage?' disabled':''}>${inStage?'已暂存':'暂存'}</button>`;
+      const aFlags = allowedFlags(defFlag);
+      const flagOpts = aFlags.map(f => `<option value="${f}"${defFlag===f?' selected':''}>${f==='bx'?'必修':f==='xx'?'限选':f==='rx'?'任选':'体育'}</option>`).join('');
+      selectBtn = `<select class="nx-type-select" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}">${flagOpts}</select><select class="nx-zy-select" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}"><option value="3">3志愿</option><option value="2">2志愿</option><option value="1">1志愿</option></select><button class="nx-select-btn" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}">选课</button><button class="nx-stage-btn nx-add-stage" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}"${inStage?' disabled':''}>${inStage?'已暂存':'暂存'}</button>`;
     } else {
       selectBtn = `<span style="font-size:11px;color:#86868b">已满</span>`;
     }
@@ -1181,12 +1204,18 @@ function renderPreviewTT(courses, label) {
   const tt = {};
   courses.forEach((c, ci) => {
     const lbl = c.teacher ? `${c.name}(${c.teacher})` : c.name;
-    // Get probability color for selected courses
+    // Get probability color
     let cellColor = '';
     if (previewMode === 'selected' && c.zy) {
       const sf = c.typeCode==='006'?'bx':c.typeCode==='008'?'xx':c.typeCode==='007'?'rx':c.typeCode==='ty'?'ty':'bx';
       const p = calcProb(c, sf, c.zy);
       if (p.prob >= 0) cellColor = p.color;
+    } else if ((previewMode === 'stage' || previewMode === 'draft') && c.flag && c.zy) {
+      const ac = allCourses.find(x => x.code === c.code && String(x.seq||'0') === String(c.seq||'0'));
+      if (ac) {
+        const p = calcProb(ac, c.flag, c.zy);
+        if (p.prob >= 0) cellColor = p.color;
+      }
     }
     parseTimeSlots(c.time).forEach(({day, slot}) => {
       if (!tt[day]) tt[day] = {};
@@ -1265,14 +1294,56 @@ async function handlePreviewRemove(code, seq) {
   }
 }
 
+function stageProbHtml(c) {
+  const ac = allCourses.find(x => x.code === c.code && String(x.seq||'0') === String(c.seq||'0'));
+  if (!ac) return '';
+  const p = calcProb(ac, c.flag, c.zy);
+  if (p.prob < 0) return `<span style="font-size:9px;color:#86868b">${p.label}</span>`;
+  return `<span style="font-size:9px;font-weight:600;color:${p.color}">中签${p.label}</span>`;
+}
+
 function renderStageCart() {
   const el = $('nextthuxk-stage-list');
   if (!el) return;
   if (!stageCart.length) { el.innerHTML = '<div class="nx-st">暂无暂存课程，点击课程卡片上的「暂存」按钮添加</div>'; $('nextthuxk-stage-conflict').innerHTML=''; return; }
   el.innerHTML = stageCart.map((c, i) => {
-    const fl = c.flag==='bx'?'必修':c.flag==='xx'?'限选':c.flag==='rx'?'任选':'体育';
-    return `<div class="nx-stage-item"><span class="nx-stage-name">${esc(c.name)}${c.teacher?' <span style="color:#86868b;font-weight:400">'+esc(c.teacher)+'</span>':''}</span><span class="nx-stage-info">${c.credits}学分 · ${fl} · ${c.zy}志愿</span><button class="nx-stage-rm" data-idx="${i}">✕</button></div>`;
+    const bf = c.baseFlag || (() => { const ac = allCourses.find(x => x.code === c.code); return ac ? baseFlag(ac) : 'rx'; })();
+    const aFlags = allowedFlags(bf);
+    if (!aFlags.includes(c.flag)) { c.flag = aFlags[0]; store.set('stageCart', stageCart); }
+    const flOpts = aFlags.map(f =>
+      `<option value="${f}"${c.flag===f?' selected':''}>${f==='bx'?'必修':f==='xx'?'限选':f==='rx'?'任选':'体育'}</option>`
+    ).join('');
+    const zyOpts = [1,2,3].map(z =>
+      `<option value="${z}"${c.zy===z?' selected':''}>${z}志愿</option>`
+    ).join('');
+    const prob = stageProbHtml(c);
+    return `<div class="nx-stage-item" style="flex-wrap:wrap;gap:4px">
+      <span class="nx-stage-name" style="min-width:80px">${esc(c.name)}${c.teacher?' <span style="color:#86868b;font-weight:400">'+esc(c.teacher)+'</span>':''}</span>
+      <span class="nx-stage-info">${c.credits}学分</span>
+      <select class="nx-stage-flag-sel" data-idx="${i}" style="padding:2px 4px;border-radius:6px;border:1px solid rgba(0,0,0,.1);font-size:10px;font-family:inherit;background:#fff;cursor:pointer">${flOpts}</select>
+      <select class="nx-stage-zy-sel" data-idx="${i}" style="padding:2px 4px;border-radius:6px;border:1px solid rgba(0,0,0,.1);font-size:10px;font-family:inherit;background:#fff;cursor:pointer">${zyOpts}</select>
+      ${prob}
+      <button class="nx-stage-rm" data-idx="${i}">✕</button>
+    </div>`;
   }).join('');
+  el.querySelectorAll('.nx-stage-flag-sel').forEach(sel => {
+    sel.onchange = () => {
+      const i = parseInt(sel.dataset.idx);
+      stageCart[i].flag = sel.value;
+      store.set('stageCart', stageCart);
+      renderStageCart();
+      if (previewMode === 'stage') renderPreviewTT(stageCart, $('nextthuxk-preview-info')?.textContent || '');
+    };
+  });
+  el.querySelectorAll('.nx-stage-zy-sel').forEach(sel => {
+    sel.onchange = () => {
+      const i = parseInt(sel.dataset.idx);
+      stageCart[i].zy = parseInt(sel.value);
+      store.set('stageCart', stageCart);
+      renderStageCart();
+      if (previewMode === 'stage') renderPreviewTT(stageCart, $('nextthuxk-preview-info')?.textContent || '');
+    };
+  });
   el.querySelectorAll('.nx-stage-rm').forEach(btn => {
     btn.onclick = () => removeFromStage(parseInt(btn.dataset.idx));
   });
@@ -1288,15 +1359,88 @@ function renderStageCart() {
   }
 }
 
+let expandedDraft = -1;
+
+function draftCourseProbHtml(c) {
+  const ac = allCourses.find(x => x.code === c.code && String(x.seq||'0') === String(c.seq||'0'));
+  if (!ac) return '';
+  const p = calcProb(ac, c.flag, c.zy);
+  if (p.prob < 0) return `<span style="font-size:9px;color:#86868b">${p.label}</span>`;
+  return `<span style="font-size:9px;font-weight:600;color:${p.color}">中签${p.label}</span>`;
+}
+
 function renderDrafts() {
   const el = $('nextthuxk-drafts');
   if (!el) return;
   if (!savedDrafts.length) { el.innerHTML = ''; return; }
-  el.innerHTML = savedDrafts.map((d, i) => {
+  el.innerHTML = savedDrafts.map((d, di) => {
     const cr = d.courses.reduce((s,c) => s + (c.credits||0), 0);
     const dt = new Date(d.createdAt);
-    return `<div class="nx-draft-card"><div class="nx-draft-head"><span class="nx-draft-name">${esc(d.name)}</span><span class="nx-draft-info">${d.courses.length}门 · ${cr}学分 · ${dt.getMonth()+1}/${dt.getDate()}</span></div><div class="nx-draft-acts"><button class="nx-draft-view" data-idx="${i}">预览 & 修改</button><button class="nx-draft-go" data-idx="${i}">提交选课</button><button class="nx-draft-export" data-idx="${i}">📤</button><button class="nx-draft-del" data-idx="${i}">删除</button></div></div>`;
+    const exp = expandedDraft === di;
+    let courseList = '';
+    if (exp && d.courses.length) {
+      courseList = '<div class="nx-draft-courses" style="margin-top:6px;border-top:1px solid rgba(0,0,0,.06);padding-top:6px">';
+      d.courses.forEach((c, ci) => {
+        const bf = c.baseFlag || (() => { const ac = allCourses.find(x => x.code === c.code); return ac ? baseFlag(ac) : 'rx'; })();
+        const aFlags = allowedFlags(bf);
+        if (!aFlags.includes(c.flag)) { c.flag = aFlags[0]; store.set('drafts', savedDrafts); }
+        const flOpts = aFlags.map(f =>
+          `<option value="${f}"${c.flag===f?' selected':''}>${f==='bx'?'必修':f==='xx'?'限选':f==='rx'?'任选':'体育'}</option>`
+        ).join('');
+        const zyOpts = [1,2,3].map(z =>
+          `<option value="${z}"${c.zy===z?' selected':''}>${z}志愿</option>`
+        ).join('');
+        const prob = draftCourseProbHtml(c);
+        courseList += `<div style="display:flex;align-items:center;gap:4px;padding:3px 0;font-size:11px;border-bottom:1px solid rgba(0,0,0,.03)">
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:#1d1d1f">${esc(c.name)}</span>
+          <span style="font-size:10px;color:#86868b">${c.credits}学分</span>
+          <select class="nx-draft-flag" data-di="${di}" data-ci="${ci}" style="padding:1px 3px;border-radius:5px;border:1px solid rgba(0,0,0,.1);font-size:10px;font-family:inherit;background:#fff;cursor:pointer">${flOpts}</select>
+          <select class="nx-draft-zy" data-di="${di}" data-ci="${ci}" style="padding:1px 3px;border-radius:5px;border:1px solid rgba(0,0,0,.1);font-size:10px;font-family:inherit;background:#fff;cursor:pointer">${zyOpts}</select>
+          ${prob}
+          <button class="nx-draft-crm" data-di="${di}" data-ci="${ci}" style="width:16px;height:16px;border-radius:8px;border:none;background:rgba(255,59,48,.1);color:#ff3b30;font-size:9px;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center">✕</button>
+        </div>`;
+      });
+      courseList += '</div>';
+    }
+    const expIcon = exp ? '▼' : '▶';
+    return `<div class="nx-draft-card"><div class="nx-draft-head"><span class="nx-draft-name" style="cursor:pointer" data-toggle="${di}">${expIcon} ${esc(d.name)}</span><span class="nx-draft-info">${d.courses.length}门 · ${cr}学分 · ${dt.getMonth()+1}/${dt.getDate()}</span></div><div class="nx-draft-acts"><button class="nx-draft-view" data-idx="${di}">预览 & 修改</button><button class="nx-draft-go" data-idx="${di}">提交选课</button><button class="nx-draft-export" data-idx="${di}">📤</button><button class="nx-draft-del" data-idx="${di}">删除</button></div>${courseList}</div>`;
   }).join('');
+  el.querySelectorAll('[data-toggle]').forEach(span => {
+    span.onclick = () => {
+      const idx = parseInt(span.dataset.toggle);
+      expandedDraft = expandedDraft === idx ? -1 : idx;
+      renderDrafts();
+    };
+  });
+  el.querySelectorAll('.nx-draft-flag').forEach(sel => {
+    sel.onchange = () => {
+      const di = parseInt(sel.dataset.di), ci = parseInt(sel.dataset.ci);
+      savedDrafts[di].courses[ci].flag = sel.value;
+      store.set('drafts', savedDrafts);
+      renderDrafts();
+      if (previewMode === 'draft' && previewDraftIdx === di) renderPreviewTT(savedDrafts[di].courses, `草稿「${savedDrafts[di].name}」预览`);
+    };
+  });
+  el.querySelectorAll('.nx-draft-zy').forEach(sel => {
+    sel.onchange = () => {
+      const di = parseInt(sel.dataset.di), ci = parseInt(sel.dataset.ci);
+      savedDrafts[di].courses[ci].zy = parseInt(sel.value);
+      store.set('drafts', savedDrafts);
+      renderDrafts();
+      if (previewMode === 'draft' && previewDraftIdx === di) renderPreviewTT(savedDrafts[di].courses, `草稿「${savedDrafts[di].name}」预览`);
+    };
+  });
+  el.querySelectorAll('.nx-draft-crm').forEach(btn => {
+    btn.onclick = () => {
+      const di = parseInt(btn.dataset.di), ci = parseInt(btn.dataset.ci);
+      const name = savedDrafts[di].courses[ci].name;
+      if (!confirm(`从草稿移除「${name}」？`)) return;
+      savedDrafts[di].courses.splice(ci, 1);
+      store.set('drafts', savedDrafts);
+      renderDrafts();
+      if (previewMode === 'draft' && previewDraftIdx === di) renderPreviewTT(savedDrafts[di].courses, `草稿「${savedDrafts[di].name}」预览`);
+    };
+  });
   el.querySelectorAll('.nx-draft-view').forEach(btn => {
     btn.onclick = () => {
       const idx = parseInt(btn.dataset.idx);
@@ -1606,10 +1750,14 @@ flag: bx=必修 xx=限选 rx=任选 ty=体育。zy: 志愿号1-3。结果将直�
     const schedule = JSON.parse(content.replace(/```json?\n?/g,'').replace(/```/g,'').trim());
 
     // Load AI result into staging cart
-    stageCart = (schedule.courses || []).map(c => ({
-      code: c.code, seq: c.seq || '0', name: c.name || '', teacher: c.teacher || '',
-      time: c.time || '', credits: c.credits || 0, flag: c.flag || 'bx', zy: c.zy || 3,
-    }));
+    stageCart = (schedule.courses || []).map(c => {
+      const ac = allCourses.find(x => x.code === c.code);
+      return {
+        code: c.code, seq: c.seq || '0', name: c.name || '', teacher: c.teacher || '',
+        time: c.time || '', credits: c.credits || 0, flag: c.flag || 'bx', zy: c.zy || 3,
+        baseFlag: c.baseFlag || (ac ? baseFlag(ac) : 'rx'),
+      };
+    });
     renderStageCart();
     renderPreviewTT(stageCart, 'AI 推荐方案');
     store.set('stageCart', stageCart);
@@ -1694,7 +1842,7 @@ function fmtTime(ts) {
   return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-const CUR_VER = '1.1.0';
+const CUR_VER = '1.1.1';
 let updateTimer = null;
 
 function cmpVer(a, b) {
@@ -1833,6 +1981,15 @@ async function launch() {
     // Load staging data
     stageCart = (await store.get('stageCart')) || [];
     savedDrafts = (await store.get('drafts')) || [];
+    // Migrate: add baseFlag to existing items that lack it
+    let migrated = false;
+    stageCart.forEach(c => {
+      if (!c.baseFlag) { const ac = allCourses.find(x => x.code === c.code); c.baseFlag = ac ? baseFlag(ac) : 'rx'; migrated = true; }
+    });
+    savedDrafts.forEach(d => d.courses.forEach(c => {
+      if (!c.baseFlag) { const ac = allCourses.find(x => x.code === c.code); c.baseFlag = ac ? baseFlag(ac) : 'rx'; migrated = true; }
+    }));
+    if (migrated) { store.set('stageCart', stageCart); store.set('drafts', savedDrafts); }
     renderStageCart();
     renderDrafts();
 
