@@ -7,7 +7,6 @@
   "permissions": ["activeTab", "storage"],
   "host_permissions": [
     "https://api.github.com/*",
-    "https://oauth.tsinghua.edu.cn/*",
     "https://webvpn.tsinghua.edu.cn/*",
     "https://zhjw.cic.tsinghua.edu.cn/*",
     "https://zhjwxk.cic.tsinghua.edu.cn/*",
@@ -29,8 +28,5 @@
   "action": {
     "default_popup": "popup.html",
     "default_title": "NextTHUxk"
-  },
-  "background": {
-    "service_worker": "background.js"
   }
 }

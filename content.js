@@ -54,54 +54,6 @@ async function fetchPage(url, opts = {}) {
 }
 
 // ─── §6. Data Layer ───────────────────────────────────────
-async function crossFetch(url) {
-  return new Promise((resolve) => {
-    try {
-      chrome.runtime.sendMessage({ action: 'crossFetch', url }, (resp) => {
-        if (chrome.runtime.lastError) { resolve(null); return; }
-        if (resp?.ok) resolve(resp.text);
-        else resolve(null);
-      });
-    } catch(e) { resolve(null); }
-  });
-}
-
-async function fetchGradeFromProfile() {
-  const profileUrl = 'https://zhjw.cic.tsinghua.edu.cn/jxmh.do?url=/jxmh.do&m=bks_ShowBksXx';
-  try {
-    const html = await crossFetch(profileUrl);
-    if (!html) { console.log(TAG, 'profile: crossFetch failed (no zhjw session or CORS)'); return 0; }
-    // Check for OAuth redirect (login page instead of profile)
-    if (html.includes('oauth') || html.includes('login') || html.includes('Ibredirect') || html.length < 500) {
-      console.log(TAG, 'profile: got login/redirect page, zhjw session not available');
-      return 0;
-    }
-    console.log(TAG, 'profile page fetched, length:', html.length, 'has 所属年级:', html.includes('所属年级'));
-    if (html.includes('所属年级')) {
-      const doc = new DOMParser().parseFromString(html, 'text/html');
-      const cells = [...doc.querySelectorAll('td')].map(td => td.textContent.trim());
-      for (let i = 0; i < cells.length - 1; i++) {
-        if (/所属年级/.test(cells[i])) {
-          const ym = cells[i + 1].match(/(\d{4})/);
-          if (ym && SEM) {
-            const enrollYear = parseInt(ym[1]);
-            const sm = SEM.match(/(\d{4})-\d+-(\d)/);
-            if (sm && enrollYear >= 2020) {
-              const totalSem = (parseInt(sm[1]) - enrollYear) * 2 + parseInt(sm[2]);
-              const grade = Math.max(1, Math.min(4, Math.ceil(totalSem / 2)));
-              console.log(TAG, 'grade from profile: 所属年级', enrollYear, '→', grade);
-              return grade;
-            }
-          }
-        }
-      }
-    }
-  } catch(e) {
-    console.log(TAG, 'profile fetch error:', e.message);
-  }
-  return 0;
-}
-
 async function fetchTrainingPlan() {
   if (isZhjwxk) {
     const html = await fetchPage(`${BASE}/jhBks.vjhBksPyfakcbBs.do?m=showBksZxZdxjxjhXmxqkclist&p_xnxq=${SEM}`);
@@ -1671,18 +1623,15 @@ async function launch() {
   await store.set('sem', SEM);
   const semBtn = $('nextthuxk-sem');
   if (semBtn) semBtn.textContent = SEM;
-  // Resolve grade: stored > profile page > plan inference > prompt
+  // Resolve grade: stored > prompt
   GRADE = (await store.get('grade')) || 0;
   if (!GRADE) {
-    GRADE = await fetchGradeFromProfile();
-    if (GRADE) console.log(TAG, 'grade detected from profile:', GRADE);
+    const g = prompt('请输入你的年级（仅影响 AI 对体育课的推荐，不影响其他功能）\n\n1=大一 2=大二 3=大三 4=大四：');
+    if (g) GRADE = Math.max(1, Math.min(4, parseInt(g) || 0));
   }
-  if (!GRADE) {
-    // Will try to infer from profile page or plan data after load
-  }
-  // Don't prompt here - wait for data to load and try better methods first
+  if (GRADE) await store.set('grade', GRADE);
   const gradeBtn = $('nextthuxk-grade');
-  if (gradeBtn) gradeBtn.textContent = GRADE ? ['', '大一', '大二', '大三', '大四'][GRADE] : '检测中...';
+  if (gradeBtn) gradeBtn.textContent = GRADE ? ['', '大一', '大二', '大三', '大四'][GRADE] : '未设置';
   const listEl = $('nextthuxk-list');
   listEl.innerHTML = '<div class="nx-empty"><span class="nx-spin"></span>&ensp;正在获取数据…</div>';
   try {
@@ -1740,17 +1689,6 @@ async function launch() {
 
     renderCourses(allCourses);
     renderPlan(planData);
-
-    // Final fallback: if still no grade after profile fetch, prompt
-    if (!GRADE) {
-      const g = prompt('无法自动检测年级，请输入（1=大一 2=大二 3=大三 4=大四）：');
-      if (g) {
-        GRADE = Math.max(1, Math.min(4, parseInt(g) || 0));
-        await store.set('grade', GRADE);
-        const gradeBtn2 = $('nextthuxk-grade');
-        if (gradeBtn2) gradeBtn2.textContent = ['', '大一', '大二', '大三', '大四'][GRADE] || '大?';
-      }
-    }
 
     // Preview timetable from selected courses
     renderPreviewTT(allCourses.filter(c => c.selected), '当前已选');
