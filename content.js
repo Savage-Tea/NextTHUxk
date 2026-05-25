@@ -4,6 +4,9 @@
 (function () {
 'use strict';
 
+// ─── §0. Cross-browser API normalization (Firefox/Chrome/Edge) ─
+const _browser = typeof browser !== 'undefined' ? browser : chrome;
+
 // ─── §1. Entry Guard ──────────────────────────────────────
 if (window.parent !== window) return;
 if (!/zhjwxk|zhjw\.cic|webvpn/.test(location.hostname)) return;

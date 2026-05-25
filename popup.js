@@ -1,3 +1,6 @@
+// Cross-browser namespace normalization (Firefox/Chrome/Edge)
+const _browser = typeof browser !== 'undefined' ? browser : chrome;
+
 const statusEl = document.getElementById('status');
 const launchBtn = document.getElementById('launch');
 
