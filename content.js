@@ -501,8 +501,12 @@ const CSS = `
 .nx-left{width:50%;border-right:1px solid rgba(0,0,0,.06);display:flex;flex-direction:column;overflow:hidden}
 .nx-right{width:50%;display:flex;flex-direction:column;overflow-y:auto}
 .nx-search-bar{padding:16px 20px;background:rgba(255,255,255,.5);border-bottom:1px solid rgba(0,0,0,.04);flex-shrink:0}
-.nx-search{width:100%;padding:11px 16px;border-radius:12px;border:1.5px solid rgba(0,0,0,.07);background:rgba(255,255,255,.9);font-size:14px;outline:none;transition:border-color .2s;box-sizing:border-box;font-family:inherit}
+.nx-search-wrap{position:relative}
+.nx-search{width:100%;padding:11px 44px 11px 16px;border-radius:12px;border:1.5px solid rgba(0,0,0,.07);background:rgba(255,255,255,.9);font-size:14px;outline:none;transition:border-color .2s;box-sizing:border-box;font-family:inherit}
 .nx-search:focus{border-color:#7c6aef}
+.nx-search-clear{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;border-radius:999px;background:transparent;color:#8e8e93;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;pointer-events:none;transition:background .15s,color .15s,opacity .15s;font-family:inherit}
+.nx-search-clear.show{opacity:1;pointer-events:auto}
+.nx-search-clear:hover{background:rgba(0,0,0,.06);color:#1d1d1f}
 .nx-filters{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .nx-chip{padding:6px 14px;border-radius:20px;border:1.5px solid rgba(0,0,0,.08);background:#fff;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;font-family:inherit;color:#1d1d1f}
 .nx-chip.on{background:#7c6aef;color:#fff;border-color:#7c6aef}
@@ -528,6 +532,10 @@ const CSS = `
 .nx-comp{margin-top:5px;position:relative;height:18px;background:rgba(0,0,0,.04);border-radius:9px;overflow:hidden}
 .nx-comp-bar{position:absolute;left:0;top:0;height:100%;border-radius:9px;opacity:.25;transition:width .3s}
 .nx-comp-txt{position:absolute;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600}
+.nx-prob-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px}
+.nx-prob-label{font-size:10px;color:#86868b}
+.nx-prob-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.nx-prob-pill-muted{background:rgba(142,142,147,.12);color:#86868b}
 .nx-card-actions{display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap}
 .nx-detail-btn,.nx-select-btn,.nx-drop-btn{padding:4px 14px;border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit;font-weight:600;border:none;transition:opacity .15s}
 .nx-detail-btn{border:1px solid rgba(124,106,239,.3);background:rgba(124,106,239,.08);color:#7c6aef}
@@ -537,6 +545,7 @@ const CSS = `
 .nx-detail-btn:disabled,.nx-select-btn:disabled,.nx-drop-btn:disabled{opacity:.5;cursor:not-allowed}
 .nx-zy-select,.nx-type-select{padding:4px 8px;border-radius:8px;border:1px solid rgba(0,0,0,.1);font-size:11px;font-family:inherit;background:#fff;cursor:pointer}
 .nx-vol-info{font-size:11px;font-weight:600;color:#7c6aef;padding:3px 10px;border-radius:8px;background:rgba(124,106,239,.1);white-space:nowrap}
+.nx-inline-prob{display:inline-flex;align-items:center;justify-content:center;min-width:44px;padding:0 2px;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0}
 .nx-vol-btn{width:26px;height:26px;border-radius:6px;border:1px solid rgba(0,0,0,.1);background:#fff;font-size:12px;cursor:pointer;font-family:inherit;color:#1d1d1f;transition:background .15s;padding:0;display:flex;align-items:center;justify-content:center}
 .nx-vol-btn:hover:not(:disabled){background:rgba(124,106,239,.1)}
 .nx-vol-btn:disabled{opacity:.3;cursor:not-allowed}
@@ -583,6 +592,9 @@ const CSS = `
 .nx-tt td.nx-c{background:rgba(255,59,48,.1);color:#ff3b30;border:1px dashed rgba(255,59,48,.3)}
 .nx-tt-cell{position:relative}
 .nx-tt-text{display:block;font-size:10px;line-height:1.3;word-break:break-all}
+.nx-tt-line{display:flex;flex-direction:column;align-items:center;gap:2px;margin-bottom:3px}
+.nx-tt-line:last-child{margin-bottom:0}
+.nx-tt-prob{display:inline-block;padding:1px 6px;border-radius:999px;font-size:9px;font-weight:700;line-height:1.4}
 .nx-tt-rm{position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:50%;background:rgba(0,0,0,.15);color:#fff;font-size:9px;line-height:14px;text-align:center;cursor:pointer;display:none}
 .nx-tt td:hover .nx-tt-rm{display:inline-block}
 .nx-tt-rm:hover{background:rgba(255,59,48,.7)}
@@ -637,7 +649,10 @@ const HTML = `
     <div class="nx-main">
       <div class="nx-left">
         <div class="nx-search-bar">
-          <input type="text" class="nx-search" id="nextthuxk-search" placeholder="🔍 搜索课程名称、教师、课程号…">
+          <div class="nx-search-wrap">
+            <input type="text" class="nx-search" id="nextthuxk-search" placeholder="🔍 搜索课程名称、教师、课程号…">
+            <button type="button" class="nx-search-clear" id="nextthuxk-search-clear" aria-label="清空搜索">×</button>
+          </div>
           <div class="nx-filters" id="nextthuxk-filters">
             <button class="nx-chip on" data-f="all">全部</button>
             <button class="nx-chip" data-f="available">可选</button>
@@ -962,8 +977,10 @@ function renderCourses(list) {
       <span class="nx-comp-txt" style="color:${vc.color}">${volApplied}/${volCap} · ${compLabel}</span>
     </div>` : '';
     // Probability: show all allowed type × zy combinations
-    let probHtml = '';
-    probHtml = fullProbGrid(c, defFlag);
+    const currentFlag = c.selected ? typeCodeToFlag(c.typeCode) : defFlag;
+    const currentZy = c.selected ? (c.zy || 3) : 3;
+    const currentProbHtml = currentProbLine(c, currentFlag, currentZy);
+    const probHtml = fullProbGrid(c, defFlag);
     const detail = [
       c.capacity ? `容量${c.capacity}` : '',
       c.remaining !== undefined ? `余${c.remaining}` : '',
@@ -972,18 +989,22 @@ function renderCourses(list) {
     let selectBtn;
     if (c.selected) {
       const volLabel = c.zy ? `<span class="nx-vol-info">第${c.zy}志愿 · ${esc(c.typeLabel||'')}</span>` : '';
+      const p = currentProbMeta(c, currentFlag, currentZy);
+      const probInline = `<span class="nx-inline-prob nx-card-inline-prob" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}" style="color:${p.color}">${p.percentLabel || p.label}</span>`;
       const canUp = c.zy && c.zy > 1 && canAdjustZy(c.code, c.seq||'0', c.zy - 1);
       const canDown = c.zy && c.zy < 3 && canAdjustZy(c.code, c.seq||'0', c.zy + 1);
       const upBtn = canUp ? `<button class="nx-vol-btn" data-dir="up" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}" data-zy="${c.zy}">▲</button>` : (c.zy > 1 ? `<button class="nx-vol-btn" disabled title="该志愿名额已满">▲</button>` : '');
       const downBtn = canDown ? `<button class="nx-vol-btn" data-dir="down" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}" data-zy="${c.zy}">▼</button>` : (c.zy < 3 ? `<button class="nx-vol-btn" disabled title="该志愿名额已满">▼</button>` : '');
-      const sFlag = c.typeCode==='006'?'bx':c.typeCode==='008'?'xx':c.typeCode==='007'?'rx':c.typeCode==='ty'?'ty':'bx';
+      const sFlag = typeCodeToFlag(c.typeCode);
       const inStage = stageCart.some(s => s.code === c.code && String(s.seq) === String(c.seq||'0'));
-      selectBtn = `${volLabel}${upBtn}${downBtn}<button class="nx-stage-btn nx-add-stage-sel" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}" data-flag="${sFlag}" data-zy="${c.zy||3}"${inStage?' disabled':''}>${inStage?'已暂存':'暂存'}</button><button class="nx-drop-btn" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}">退选</button>`;
+      selectBtn = `${volLabel}${probInline}${upBtn}${downBtn}<button class="nx-stage-btn nx-add-stage-sel" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}" data-flag="${sFlag}" data-zy="${c.zy||3}"${inStage?' disabled':''}>${inStage?'已暂存':'暂存'}</button><button class="nx-drop-btn" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}">退选</button>`;
     } else if (c.available) {
       const inStage = stageCart.some(s => s.code === c.code && String(s.seq) === String(c.seq||'0'));
       const aFlags = allowedFlags(defFlag);
       const flagOpts = aFlags.map(f => `<option value="${f}"${defFlag===f?' selected':''}>${f==='bx'?'必修':f==='xx'?'限选':f==='rx'?'任选':'体育'}</option>`).join('');
-      selectBtn = `<select class="nx-type-select" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}">${flagOpts}</select><select class="nx-zy-select" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}"><option value="3">3志愿</option><option value="2">2志愿</option><option value="1">1志愿</option></select><button class="nx-select-btn" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}">选课</button><button class="nx-stage-btn nx-add-stage" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}"${inStage?' disabled':''}>${inStage?'已暂存':'暂存'}</button>`;
+      const p = currentProbMeta(c, currentFlag, currentZy);
+      const probInline = `<span class="nx-inline-prob nx-card-inline-prob" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}" style="color:${p.color}">${p.percentLabel || p.label}</span>`;
+      selectBtn = `<select class="nx-type-select" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}">${flagOpts}</select><select class="nx-zy-select" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}"><option value="3">3志愿</option><option value="2">2志愿</option><option value="1">1志愿</option></select>${probInline}<button class="nx-select-btn" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}">选课</button><button class="nx-stage-btn nx-add-stage" data-code="${esc(c.code)}" data-seq="${esc(c.seq||'0')}"${inStage?' disabled':''}>${inStage?'已暂存':'暂存'}</button>`;
     } else {
       selectBtn = `<span style="font-size:11px;color:#86868b">已满</span>`;
     }
@@ -991,7 +1012,7 @@ function renderCourses(list) {
       <div class="nx-card-head"><span class="nx-card-name">${esc(c.name)}</span><span class="nx-card-credit">${c.credits}学分</span></div>
       <div style="font-size:11px;color:#86868b;margin-bottom:3px">${esc(c.code)}${c.seq?' · '+esc(c.seq)+'课序':''}</div>
       <div class="nx-tags">${tags.join('')}</div>
-      ${volHtml}${compHtml}${probHtml}
+      ${volHtml}${compHtml}${currentProbHtml}${probHtml}
       <div class="nx-card-detail"><div class="nx-card-detail-inner">${detail}</div></div>
       <div class="nx-card-actions">
         <button class="nx-detail-btn" data-code="${esc(c.code)}" data-tid="${esc(c.teacherId||'')}">📄 简介</button>
@@ -1004,6 +1025,40 @@ function renderCourses(list) {
   });
   el.querySelectorAll('.nx-detail-btn').forEach(btn => {
     btn.onclick = e => { e.stopPropagation(); showCourseModal(btn.dataset.code, btn.dataset.tid); };
+  });
+  const syncCardProb = node => {
+    const card = node.closest('.nx-card');
+    if (!card) return;
+    const code = card.dataset.code;
+    const course = allCourses.find(x => x.code === code && String(x.seq||'0') === String(node.dataset.seq || '0'));
+    if (!course || course.selected) return;
+    const flag = card.querySelector('.nx-type-select')?.value || baseFlag(course);
+    const zy = parseInt(card.querySelector('.nx-zy-select')?.value) || 3;
+    const meta = currentProbMeta(course, flag, zy);
+    const line = card.querySelector('.nx-current-prob');
+    if (line) {
+      line.dataset.flag = flag;
+      line.dataset.zy = String(zy);
+      const pill = line.querySelector('.nx-prob-pill');
+      if (pill) {
+        const detail = meta.ratioLabel && meta.ratioLabel !== '无数据' ? ` · ${meta.ratioLabel}` : '';
+        pill.textContent = `${meta.flagLabel} · ${meta.zy}志愿 · ${meta.percentLabel || meta.label}${detail}`;
+        pill.style.background = meta.bg;
+        pill.style.color = meta.color;
+        pill.classList.toggle('nx-prob-pill-muted', meta.prob < 0);
+      }
+    }
+    const inline = card.querySelector('.nx-card-inline-prob');
+    if (inline) {
+      inline.textContent = meta.percentLabel || meta.label;
+      inline.style.color = meta.color;
+    }
+  };
+  el.querySelectorAll('.nx-type-select,.nx-zy-select').forEach(sel => {
+    sel.onchange = e => {
+      e.stopPropagation();
+      syncCardProb(sel);
+    };
   });
   el.querySelectorAll('.nx-select-btn').forEach(btn => {
     btn.onclick = async e => {
@@ -1096,12 +1151,13 @@ function volColor(course) {
 
 function parseVolArr(s) {
   if (!s) return null;
-  const a = s.split(',').map(Number);
-  return (a.length >= 3) ? a : null;
+  const nums = String(s).match(/\d+/g);
+  if (!nums || nums.length < 3) return null;
+  return nums.slice(-3).map(n => parseInt(n, 10) || 0);
 }
 
 function calcProb(course, flag, zy) {
-  const cap = course.volCapacity || course.capacity || 0;
+  const cap = parseInt(course.volCapacity || course.capacity || 0, 10) || 0;
   if (!cap) return { prob: -1, label: '无数据', color: '#86868b' };
 
   const zyIdx = zy - 1;
@@ -1115,41 +1171,73 @@ function calcProb(course, flag, zy) {
     return probResult(rem, vols[zyIdx]);
   }
 
-  // 必修/限选/任选：全局级联 必修1→必修2→必修3→限选1→限选2→限选3→任选1→任选2→任选3
-  const bxV = parseVolArr(course.volRequired);
-  const xxV = parseVolArr(course.volElective);
-  const rxV = parseVolArr(course.volOptional);
-  const typeOrder = [
-    ['bx', bxV], ['xx', xxV], ['rx', rxV],
-  ];
-
+  // 非体育课：在当前课程属性内按 1→2→3 志愿级联
+  const vols = flag === 'bx'
+    ? parseVolArr(course.volRequired)
+    : flag === 'xx'
+      ? parseVolArr(course.volElective)
+      : parseVolArr(course.volOptional);
+  if (!vols) return { prob: -1, label: '无数据', color: '#86868b' };
   let rem = cap;
-  for (const [tf, tv] of typeOrder) {
-    if (!tv) continue;
-    for (let i = 0; i < 3; i++) {
-      if (tf === flag && i === zyIdx) {
-        return probResult(rem, tv[i]);
-      }
-      rem -= tv[i];
-    }
-  }
-  return { prob: -1, label: '无数据', color: '#86868b' };
+  for (let i = 0; i < zyIdx; i++) rem -= vols[i];
+  return probResult(rem, vols[zyIdx]);
 }
 
 function probResult(rem, applicants) {
-  if (rem <= 0) return { prob: 0, label: '0%', color: '#ff3b30' };
+  if (!Number.isFinite(rem) || !Number.isFinite(applicants)) {
+    return { prob: -1, label: '无数据', percentLabel: '无数据', ratioLabel: '无数据', color: '#86868b' };
+  }
+  const remShown = Math.max(0, Math.round(rem));
+  const applicantsShown = Math.max(0, Math.round(applicants));
+  if (rem <= 0) return { prob: 0, label: '0%', percentLabel: '0%', ratioLabel: `${remShown}/${applicantsShown}`, color: '#ff3b30' };
   const prob = applicants === 0 ? 1 : Math.min(1, rem / applicants);
+  if (!Number.isFinite(prob)) return { prob: -1, label: '无数据', percentLabel: '无数据', ratioLabel: '无数据', color: '#86868b' };
   let color;
   if (prob >= 0.8) color = '#34c759';
   else if (prob >= 0.5) color = '#ff9500';
   else color = '#ff3b30';
-  return { prob, label: Math.round(prob * 100) + '%', color };
+  const percentLabel = Math.round(prob * 100) + '%';
+  const ratioLabel = `${remShown}/${applicantsShown}`;
+  return { prob, label: percentLabel, percentLabel, ratioLabel, color };
+}
+
+function flagName(flag) {
+  return flag === 'bx' ? '必修' : flag === 'xx' ? '限选' : flag === 'rx' ? '任选' : '体育';
+}
+
+function typeCodeToFlag(typeCode) {
+  return typeCode === '006' ? 'bx' : typeCode === '008' ? 'xx' : typeCode === '007' ? 'rx' : typeCode === 'ty' ? 'ty' : 'bx';
+}
+
+function probBg(color) {
+  if (color === '#34c759') return 'rgba(52,199,89,.14)';
+  if (color === '#ff9500') return 'rgba(255,149,0,.14)';
+  if (color === '#ff3b30') return 'rgba(255,59,48,.14)';
+  return 'rgba(142,142,147,.12)';
+}
+
+function currentProbMeta(course, flag, zy) {
+  const p = calcProb(course, flag, zy);
+  return {
+    ...p,
+    flag,
+    zy,
+    flagLabel: flagName(flag),
+    bg: probBg(p.color),
+  };
+}
+
+function currentProbLine(course, flag, zy) {
+  const p = currentProbMeta(course, flag, zy);
+  const pillClass = p.prob >= 0 ? '' : ' nx-prob-pill-muted';
+  const pillStyle = p.prob >= 0 ? `style="background:${p.bg};color:${p.color}"` : '';
+  const detail = p.ratioLabel && p.ratioLabel !== '无数据' ? ` · ${p.ratioLabel}` : '';
+  return `<div class="nx-prob-line nx-current-prob" data-code="${esc(course.code)}" data-seq="${esc(course.seq||'0')}" data-flag="${esc(flag)}" data-zy="${esc(zy)}"><span class="nx-prob-label">当前选法</span><span class="nx-prob-pill${pillClass}" ${pillStyle}>${esc(p.flagLabel)} · ${p.zy}志愿 · ${p.percentLabel || p.label}${detail}</span></div>`;
 }
 
 // Generate full probability grid for a course showing all allowed type × zy combinations
 function fullProbGrid(courseOrAc, bf) {
   const aFlags = allowedFlags(bf);
-  const flagName = f => f==='bx'?'必修':f==='xx'?'限选':f==='rx'?'任选':'体育';
   const rows = [];
   for (const f of aFlags) {
     const cells = [];
@@ -1211,20 +1299,30 @@ function renderPreviewTT(courses, label) {
     const lbl = c.teacher ? `${c.name}(${c.teacher})` : c.name;
     // Get probability color
     let cellColor = '';
+    let probLabel = '';
+    let probBgColor = '';
     if (previewMode === 'selected' && c.zy) {
-      const sf = c.typeCode==='006'?'bx':c.typeCode==='008'?'xx':c.typeCode==='007'?'rx':c.typeCode==='ty'?'ty':'bx';
+      const sf = typeCodeToFlag(c.typeCode);
       const p = calcProb(c, sf, c.zy);
-      if (p.prob >= 0) cellColor = p.color;
+      if (p.prob >= 0) {
+        cellColor = p.color;
+        probLabel = p.percentLabel || p.label;
+        probBgColor = probBg(p.color);
+      }
     } else if ((previewMode === 'stage' || previewMode === 'draft') && c.flag && c.zy) {
       const ac = allCourses.find(x => x.code === c.code && String(x.seq||'0') === String(c.seq||'0'));
       if (ac) {
         const p = calcProb(ac, c.flag, c.zy);
-        if (p.prob >= 0) cellColor = p.color;
+        if (p.prob >= 0) {
+          cellColor = p.color;
+          probLabel = p.percentLabel || p.label;
+          probBgColor = probBg(p.color);
+        }
       }
     }
     parseTimeSlots(c.time).forEach(({day, slot}) => {
       if (!tt[day]) tt[day] = {};
-      const entry = {label: lbl, ci, code: c.code, seq: c.seq || '0', color: cellColor};
+      const entry = {label: lbl, ci, code: c.code, seq: c.seq || '0', color: cellColor, probLabel, probBgColor};
       if (tt[day][slot]) {
         const old = tt[day][slot];
         const labels = (old.conflict ? old.items : [old]).concat(entry);
@@ -1243,11 +1341,14 @@ function renderPreviewTT(courses, label) {
       const val = tt[day]?.[slot];
       if (val) {
         const isC = val.conflict;
-        const text = isC ? val.label : val.label;
         const items = isC ? val.items : [val];
         const btns = items.map(it =>
           `<span class="nx-tt-rm" data-code="${esc(it.code)}" data-seq="${esc(it.seq)}" title="移除 ${esc(it.label)}">✕</span>`
         ).join('');
+        const linesHtml = items.map(it => {
+          const probHtml = it.probLabel ? `<span class="nx-tt-prob" style="background:${it.probBgColor};color:${it.color}">${it.probLabel}</span>` : '';
+          return `<div class="nx-tt-line"><span class="nx-tt-text">${esc(it.label)}</span>${probHtml}</div>`;
+        }).join('');
         // Use probability color for non-conflict cells in selected mode
         let cellClass = isC ? 'nx-c' : 'nx-s';
         let cellStyle = '';
@@ -1255,7 +1356,7 @@ function renderPreviewTT(courses, label) {
           const alpha = val.color === '#34c759' ? '.1' : val.color === '#ff9500' ? '.1' : '.1';
           cellStyle = `background:${val.color}${val.color.startsWith('rgba')?'':alpha};color:${val.color}`;
         }
-        h += `<td class="${cellClass}" ${cellStyle?`style="${cellStyle}"`:''}><div class="nx-tt-cell"><span class="nx-tt-text">${esc(text)}</span>${btns}</div></td>`;
+        h += `<td class="${cellClass}" ${cellStyle?`style="${cellStyle}"`:''}><div class="nx-tt-cell">${linesHtml}${btns}</div></td>`;
       } else h += '<td></td>';
     });
     h += '</tr>';
@@ -1645,6 +1746,7 @@ function renderPlan(plan) {
 // ─── §12. Filters ─────────────────────────────────────────
 function filterCourses() {
   const q = $('nextthuxk-search').value.toLowerCase();
+  updateSearchClear();
   const f = shadow.querySelector('.nx-chip.on')?.dataset.f || 'all';
 
   if (f === 'plan') {
@@ -1687,6 +1789,12 @@ function filterCourses() {
     });
   }
   renderCourses(list);
+}
+
+function updateSearchClear() {
+  const btn = $('nextthuxk-search-clear');
+  const hasValue = !!$('nextthuxk-search').value.trim();
+  btn.classList.toggle('show', hasValue);
 }
 
 function filterByGroup(g) {
@@ -2028,6 +2136,11 @@ $('nextthuxk-refresh').onclick = async () => {
   launch();
 };
 $('nextthuxk-search').oninput = filterCourses;
+$('nextthuxk-search-clear').onclick = () => {
+  $('nextthuxk-search').value = '';
+  filterCourses();
+  $('nextthuxk-search').focus();
+};
 $('nx-filter-credits').onchange = filterCourses;
 $('nx-filter-day').onchange = filterCourses;
 $('nx-filter-period').onchange = filterCourses;
