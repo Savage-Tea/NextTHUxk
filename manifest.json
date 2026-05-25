@@ -4,6 +4,10 @@
   "short_name": "NextTHUxk",
   "version": "1.2.0",
   "description": "下一代选课 - 基于 AI 决策与现代双栏 UI 的选课无感辅助系统。",
+  "data_collection_permissions": {
+    "default": "never",
+    "new_install": "never"
+  },
   "permissions": ["activeTab", "storage"],
   "host_permissions": [
     "https://api.github.com/*",
